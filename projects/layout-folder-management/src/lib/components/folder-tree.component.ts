@@ -17,7 +17,8 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
-import { TreeDragDropService, TreeNode } from 'primeng/api';
+import { TreeDragDropService, TreeNode, ConfirmationService } from 'primeng/api';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 
 import { FolderTreeStore } from '../store/folder-tree.store';
 import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
@@ -35,8 +36,9 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
     IconFieldModule,
     InputIconModule,
     DatePipe,
+    ConfirmDialogModule,
   ],
-  providers: [TreeDragDropService, FolderTreeStore],
+  providers: [TreeDragDropService, FolderTreeStore, ConfirmationService],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.css',
 })
@@ -51,6 +53,7 @@ export class FolderTreeComponent {
   selectedFileIdChange = output<string | null>();
 
   protected readonly store = inject(FolderTreeStore);
+  protected readonly confirmationService = inject(ConfirmationService);
 
   // --- Local UI State ---
   protected readonly editingId = signal<string | null>(null);
@@ -190,39 +193,84 @@ export class FolderTreeComponent {
     return null;
   }
 
+  protected readonly creatingId = signal<string | null>(null);
+
   protected onAddFolder(parentId: string | null = null): void {
-    const name = prompt('New folder name:', 'New folder');
-    if (!name?.trim()) return;
-    this.store.addFolder(parentId, name.trim());
+    // Add folder with placeholder name
+    const newId = this.store.addFolder(parentId, '');
+    
     // Auto-expand the parent folder
     if (parentId) {
       const parentNode = this.findNodeByKey(this.treeValue(), parentId);
       if (parentNode) parentNode.expanded = true;
     }
+
+    // Immediately trigger rename mode and track as new creation
+    this.creatingId.set(newId);
+    this.startRename(newId, '');
   }
 
   protected startRename(id: string, currentLabel: string): void {
     this.editingId.set(id);
-    this.editingValue.set(currentLabel);
+    this.editingValue.set(currentLabel === '(untitled folder)' ? '' : currentLabel);
   }
 
   protected commitRename(id: string): void {
-    const value = this.editingValue();
+    const value = this.editingValue().trim();
     if (this.editingId() === id) {
+      if (!value) {
+        // Name cannot be empty
+        return;
+      }
+
+      // Check for duplicate names on the same level using unfiltered tree
+      const allNodes = this.store.treeNodes();
+      const nodeToRename = this.findNodeByKey(allNodes, id);
+      if (nodeToRename) {
+        const location = this.findNodeInTree(allNodes, nodeToRename);
+        if (location) {
+          const siblings = location.parent ? location.parent.children! : allNodes;
+          const duplicate = siblings.some(s => s.key !== id && s.label?.toLowerCase() === value.toLowerCase());
+          if (duplicate) {
+            this.confirmationService.confirm({
+              message: 'A file or folder with this name already exists at this location.',
+              header: 'Duplicate Name',
+              icon: 'pi pi-exclamation-triangle',
+              rejectVisible: false,
+              acceptLabel: 'OK',
+            });
+            return;
+          }
+        }
+      }
+
       this.store.renameFolder(id, value);
       this.editingId.set(null);
+      this.creatingId.set(null);
     }
   }
 
-  protected cancelRename(): void {
+  protected cancelRename(id?: string): void {
+    const targetId = id ?? this.editingId();
+    if (targetId && targetId === this.creatingId()) {
+      // If we cancelled during initial creation, remove the ephemeral node
+      this.store.deleteNode(targetId);
+    }
     this.editingId.set(null);
+    this.creatingId.set(null);
   }
 
   protected onDelete(data: NodeData): void {
-    const what = data.kind === 'folder' ? 'folder' : 'file';
-    if (confirm(`Delete this ${what}?`)) {
-      this.store.deleteNode(data.id);
-    }
+    this.confirmationService.confirm({
+      message: 'Are you sure you want to delete this item?',
+      header: 'Confirm Deletion',
+      icon: 'pi pi-info-circle',
+      acceptButtonStyleClass: 'p-button-danger p-button-text',
+      rejectButtonStyleClass: 'p-button-text',
+      accept: () => {
+        this.store.deleteNode(data.id);
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

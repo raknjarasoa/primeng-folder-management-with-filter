@@ -100,7 +100,7 @@ export function addFolder(
 ): { forest: SessionNode[]; newId: string } {
   const newId = `f-${Date.now().toString(36)}`;
   const folder: SessionNode = { id: newId, kind: 'folder', name, children: [] };
-  const newForest = insertNode(forest, folder, parentFolderId);
+  const newForest = insertNode(forest, folder, parentFolderId, 0);
   return { forest: newForest, newId };
 }
 

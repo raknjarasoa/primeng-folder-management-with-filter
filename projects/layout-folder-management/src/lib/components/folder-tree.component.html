@@ -35,6 +35,7 @@
       label="New folder"
       outlined
       size="small"
+      [disabled]="editingId() !== null"
       (click)="onAddFolder()"
     ></button>
   </div>
@@ -72,7 +73,7 @@
           [ngModel]="editingValue()"
           (ngModelChange)="editingValue.set($event)"
           (keydown.enter)="commitRename(node.data.id)"
-          (keydown.escape)="cancelRename()"
+          (keydown.escape)="cancelRename(node.data.id)"
           autofocus
         />
         <button
@@ -114,6 +115,7 @@
             rounded
             size="small"
             pTooltip="Add subfolder"
+            [disabled]="editingId() !== null"
             (click)="onAddFolder(node.data.id); $event.stopPropagation()"
           ></button>
           <button
@@ -139,4 +141,6 @@
       </span>
     </div>
   </ng-template>
+
+  <p-confirmDialog></p-confirmDialog>
 </div>
