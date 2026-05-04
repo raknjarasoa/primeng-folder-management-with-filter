@@ -43,7 +43,6 @@
 
 .search-input {
   width: 100%;
-  padding-left: 32px !important;
   font-size: 13px;
   height: 34px;
 }
@@ -58,10 +57,6 @@
   border-radius: 6px;
   background: #f3f4f6;
   font-size: 14px;
-}
-.status.error {
-  background: #fef2f2;
-  color: #991b1b;
 }
 
 .tree {

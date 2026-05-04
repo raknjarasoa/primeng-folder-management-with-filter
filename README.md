@@ -1,61 +1,63 @@
-# Folder management system
+# Folder Management
 
-An Angular 19+ library using PrimeNG `<p-tree>` and NgRx SignalStore to provide an interactive, reusable folder and layout management widget. Features include native drag-and-drop reordering, inline folder renaming, file selection, search filtering, and multi-instance isolation.
+A reusable Angular 19+ folder-tree widget built with **PrimeNG `<p-tree>`** and **NgRx SignalStore**.
 
-## Architecture
+**Features:** drag-and-drop reordering · inline folder rename · file selection · search filtering · multi-instance isolation.
 
-The system is built as a highly reusable, purely presentational/stateful "dumb" component library (`layout-folder-management`). It does not handle HTTP requests directly. Instead, your application fetches the data and passes it down.
-
-Two data models feed the tree:
-
-| Model      | Shape                       | Purpose                                            |
-| ---------- | --------------------------- | -------------------------------------------------- |
-| `sessions` | hierarchical `SessionNode[]` | Persisted folder structure. Source of truth for hierarchy. |
-| `layouts`  | flat `Layout[]`              | File metadata: `name`, `lastUpdated`, `lastViewDate`. Joined by `id`. |
-
-### Why keep them separate?
-
-Joining server-side ties two concerns together (structure vs. metadata refresh).
-By keeping `sessions` and `layouts` separate, you can:
-- Refresh layout metadata (timestamps, names) independently of the structural tree shape.
-- Persist only the `sessions` hierarchy when the user moves things around.
-- Lazily compute the PrimeNG UI tree via `computed` and `linkedSignal`.
-
-### Data flow
-
-The library manages the local UI state using an internal NgRx SignalStore. Changes are emitted via Angular outputs.
-
-```
-  Parent App         <app-folder-tree> (Library)
-  ----------         ---------------------------
-  sessions()   ──>   input() ──> Store ──> linkedSignal ──> PrimeNG <p-tree>
-  layouts()    ──>   input() ──> Store ──> linkedSignal ──> PrimeNG <p-tree>
-  
-  save()       <──   (sessionsChange)  <──  Drag/Drop, Rename, Delete
-```
-
-## Key files (projects/layout-folder-management/src/lib/)
-
-- `models/folder-tree.models.ts` — Domain types (`SessionNode`, `Layout`, `NodeData`)
-- `store/tree-helpers.ts` — Pure, immutable tree manipulation functions (insert, remove, rename, cycle check) powered by modern `structuredClone`.
-- `store/folder-tree.store.ts` — NgRx SignalStore. Provided at the component level to support true multi-instance capability.
-- `components/folder-tree.component.ts` — Modern Angular v19 component using `linkedSignal`, `input()`, and `output()`.
-
-## Drag-drop semantics
-
-PrimeNG mutates its internal copy of the tree on drop natively. 
-Our component bridges this gap gracefully using Angular v19's `linkedSignal`. 
-We capture the `dragNode` from the `(onNodeDrop)` event, locate its new position in the mutated tree, and explicitly maintain `parent` property pointers so native array splicing works correctly. We then apply the permanent move via `store.moveNode(...)` inside a short timeout to decouple state synchronization from the UI animation loop.
-
-The store enforces:
-- Files cannot receive drops (only folders are valid drop targets).
-- Cycle prevention (a folder cannot be dropped into itself or its descendants).
-
-## Run
+## Quick start
 
 ```bash
 npm install
-npm start
+npm start        # http://localhost:4200
 ```
 
-Open `http://localhost:4200` to see the dual-instance demonstration.
+## How it works
+
+The library (`layout-folder-management`) is a single standalone component: `<app-folder-tree>`.  
+Your app fetches data and passes it in — the component handles the rest.
+
+```
+App                         <app-folder-tree>
+───                         ─────────────────
+[sessions] ──►  input()  ──►  Store  ──►  linkedSignal  ──►  <p-tree>
+[layouts]  ──►  input()  ──►  Store  ──►  linkedSignal  ──►  <p-tree>
+
+(sessionsChange)  ◄──  Drag / Drop / Rename / Delete
+```
+
+### Two inputs, one tree
+
+| Input      | Shape                        | Purpose                                     |
+| ---------- | ---------------------------- | ------------------------------------------- |
+| `sessions` | `SessionNode[]` (hierarchy)  | Folder structure — source of truth for shape |
+| `layouts`  | `Layout[]` (flat list)       | File metadata (name, timestamps), joined by `id` |
+
+Keeping them separate lets you refresh metadata without touching the hierarchy, and persist only the structure on drag-and-drop.
+
+### Multi-instance
+
+The store is provided at the component level, so every `<app-folder-tree>` gets its own isolated state. The demo app shows two instances side-by-side.
+
+### Drag-and-drop
+
+PrimeNG mutates the tree array in place. The component locates the dropped node's new position in the mutated tree and applies it to the store via `store.moveNode()` inside a short `setTimeout` to keep the UI smooth.
+
+**Guards:** files cannot receive drops; cycles are prevented (a folder cannot be dropped into itself or its children).
+
+## Project structure
+
+```
+projects/layout-folder-management/src/lib/
+├── models/folder-tree.models.ts    # SessionNode, Layout, NodeData
+├── store/tree-helpers.ts           # Pure immutable tree functions (structuredClone)
+├── store/folder-tree.store.ts      # NgRx SignalStore (component-scoped)
+└── components/
+    ├── folder-tree.component.ts    # linkedSignal, input(), output()
+    ├── folder-tree.component.html  # PrimeNG <p-tree> template
+    └── folder-tree.component.css   # Minimal scoped styles
+
+src/app/
+├── app.component.ts                # Demo: dual-instance layout
+├── app.config.ts                   # Zoneless + PrimeNG Aura theme
+└── services/folder-api.service.ts  # Mock data
+```

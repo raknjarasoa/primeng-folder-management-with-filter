@@ -11,7 +11,7 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CommonModule, DatePipe } from '@angular/common';
+import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { TreeModule, TreeNodeDropEvent } from 'primeng/tree';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
@@ -28,7 +28,7 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    CommonModule,
+    NgTemplateOutlet,
     FormsModule,
     TreeModule,
     ButtonModule,
@@ -93,8 +93,8 @@ export class FolderTreeComponent {
         : source.nodes;
 
       const keysToExpand = source.filter ? this.collectAllKeys(filtered) : expandedKeys;
-      
-      return this.deepCopyWithExpanded(filtered, keysToExpand);
+
+      return filtered.map((n) => this.copyNode(n, keysToExpand));
     }
   });
 
@@ -338,13 +338,6 @@ export class FolderTreeComponent {
     return keys;
   }
 
-  private deepCopyWithExpanded(
-    nodes: TreeNode<NodeData>[],
-    expandedKeys: Set<string>,
-    parent?: TreeNode<NodeData>,
-  ): TreeNode<NodeData>[] {
-    return nodes.map((n) => this.copyNode(n, expandedKeys, parent));
-  }
 
   private copyNode(
     node: TreeNode<NodeData>,

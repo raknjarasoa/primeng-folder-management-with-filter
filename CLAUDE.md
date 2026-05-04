@@ -1,70 +1,47 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Context for Claude Code (and other AI assistants) working in this repository.
 
 ## Commands
 
 ```bash
-npm start          # dev server at http://localhost:4200
-npm run build      # production build of both library and app
+npm start       # dev server at http://localhost:4200
+npm run build   # production build (library + app)
 ```
 
 ## Architecture
 
-Angular 19+ + NgRx SignalStore + PrimeNG `<p-tree>`.
-The core logic resides in a dedicated, multi-instance Angular library: `layout-folder-management`.
+Angular 19+ · NgRx SignalStore · PrimeNG `<p-tree>` · Zoneless.
 
-### Two-source data model
+The library is `layout-folder-management`. It exports one component (`FolderTreeComponent`) and two model interfaces (`SessionNode`, `Layout`).
 
-The tree is fed by two separate models passed to the component via Angular `input()`s:
-
-| Source | Shape | Role |
-|---|---|---|
-| `sessions` | `SessionNode[]` (hierarchical) | Folder structure — source of truth for tree shape |
-| `layouts` | `Layout[]` (flat) | File metadata (name, timestamps) — joined to leaves by `id` |
-
-These are kept separate so the hierarchy (`sessions`) and file metadata (`layoutsById`) can be updated independently. The store joins them at projection time via a `computed` signal (`treeNodes`).
-
-### State → UI flow
-
-The library's `FolderTreeComponent` is a "dumb" component that relies on its internal SignalStore.
+### Data flow
 
 ```
-Parent App (Data Fetching)
-  │
-  ├── [sessions] ───┐
-  ├── [layouts]  ───┤
-  │                 ▼
-  │          Component inputs() -> effect() calls store.initData()
-  │                 │
-  │                 ▼
-  │          NgRx SignalStore (State: sessions, layoutsById, selectedFileId)
-  │                 │
-  │                 ▼
-  │          linkedSignal treeValue (resolves treeNodes, applies filters, maintains expand state, wires parent references)
-  │                 │
-  │                 ▼
-  │          <p-tree [value]="treeValue()">
+Parent inputs          Component internals
+──────────────         ──────────────────────────────────
+[sessions] ──►  effect() → store.initData()
+[layouts]  ──►       ↓
+                 SignalStore (sessions, layoutsById, selectedFileId)
+                     ↓
+                 computed treeNodes → linkedSignal treeValue
+                     ↓
+                 <p-tree [value]="treeValue()">
 ```
 
-### Multi-Instance capability
+### Key design decisions
 
-- The `FolderTreeStore` is provided at the Component level (`providers: [FolderTreeStore]`), meaning each `<app-folder-tree>` creates its own isolated sandbox.
-- The parent application (`app.component.ts`) fetches the data using `FolderApiService` and injects it into multiple instances to demonstrate parallel independence.
-
-### Expanded state preservation
-
-Because PrimeNG mutates the tree in place, the component uses Angular v19's `linkedSignal` to bridge the gap.
-When the `treeNodes` store projection changes, `linkedSignal` generates a new array using `deepCopyWithExpanded`, manually recreating the `expanded` boolean values based on the previously expanded keys, and explicitly setting the `parent` object reference so native PrimeNG drops work properly.
-
-### Drag-drop semantics
-
-PrimeNG mutates its internal tree in-place. Because `treeValue` is a `linkedSignal`, we let the native drag-and-drop event loop resolve before applying state changes. We identify the drop location by parsing the mutated tree structure rather than relying on ambiguous drop event properties. Finally, we execute `store.moveNode(...)` wrapped in a short `setTimeout` to decouple the reactive state update from PrimeNG's synchronous event loop, ensuring a smooth UI.
+- **Two-source model** — `sessions` (hierarchy) and `layouts` (flat metadata) are kept separate so each can be refreshed independently.
+- **Component-scoped store** — `providers: [FolderTreeStore]` on the component gives each instance its own state.
+- **linkedSignal** — bridges the reactive store with PrimeNG's mutative tree. On each recomputation it deep-copies nodes, restores `expanded` state, and wires `parent` references for drag-and-drop.
+- **Drag-drop** — after PrimeNG mutates the tree in-place, we find the node's new location by scanning the mutated array, then apply `store.moveNode()` inside a `setTimeout` to decouple from PrimeNG's synchronous event loop.
 
 ### Key files
 
-- `projects/layout-folder-management/src/lib/models/folder-tree.models.ts` — `SessionNode`, `Layout`, `NodeData` types
-- `projects/layout-folder-management/src/lib/store/tree-helpers.ts` — pure functions on `SessionNode[]` using `structuredClone`.
-- `projects/layout-folder-management/src/lib/store/folder-tree.store.ts` — Component-scoped NgRx `signalStore`.
-- `projects/layout-folder-management/src/lib/components/folder-tree.component.ts` — UI using `linkedSignal`, `input()`, and `output()`.
-- `src/app/services/folder-api.service.ts` — Mock backend in the main app providing test data.
+| File | Purpose |
+|------|---------|
+| `lib/models/folder-tree.models.ts` | `SessionNode`, `Layout`, `NodeData` types |
+| `lib/store/tree-helpers.ts` | Pure tree functions (`structuredClone`-based) |
+| `lib/store/folder-tree.store.ts` | NgRx SignalStore |
+| `lib/components/folder-tree.component.ts` | UI: `linkedSignal`, `input()`, `output()` |
+| `src/app/services/folder-api.service.ts` | Mock data for the demo app |

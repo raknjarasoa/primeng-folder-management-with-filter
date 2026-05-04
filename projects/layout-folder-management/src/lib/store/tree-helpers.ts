@@ -84,15 +84,6 @@ export function renameFolder(
   return cloned;
 }
 
-export function findParentId(
-  forest: SessionNode[],
-  childId: string,
-): string | null | undefined {
-  const loc = findLocation(forest, childId);
-  if (!loc) return undefined;
-  return loc.parent?.id ?? null;
-}
-
 export function addFolder(
   forest: SessionNode[],
   parentFolderId: string | null,
