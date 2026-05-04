@@ -1,0 +1,142 @@
+<div class="layout">
+  <header class="header">
+    <h1>Folder management</h1>
+    <p class="hint">
+      Drag to reorder · drop into folders · double-click a folder to rename ·
+      click a file to select it
+    </p>
+  </header>
+
+  <div class="toolbar">
+    <div class="search-wrapper">
+      <i class="pi pi-search search-icon"></i>
+      <input
+        pInputText
+        class="search-input"
+        placeholder="Search folders and files…"
+        [ngModel]="filterText()"
+        (ngModelChange)="onFilterChange($event)"
+      />
+      @if (filterText()) {
+        <button
+          pButton
+          icon="pi pi-times"
+          text
+          rounded
+          size="small"
+          class="clear-btn"
+          (click)="onFilterChange('')"
+        ></button>
+      }
+    </div>
+    <button
+      pButton
+      icon="pi pi-folder-plus"
+      label="New folder"
+      outlined
+      size="small"
+      (click)="onAddFolder()"
+    ></button>
+  </div>
+
+  <p-tree
+    [value]="treeValue()"
+    [draggableNodes]="!isFiltering()"
+    [droppableNodes]="!isFiltering()"
+    draggableScope="folder-tree"
+    droppableScope="folder-tree"
+    selectionMode="single"
+    [selection]="selectedNode()"
+    (selectionChange)="onSelectionChange($event)"
+    (onNodeDrop)="onNodeDrop($event)"
+    styleClass="tree"
+  >
+    <ng-template let-node pTemplate="default">
+      <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
+    </ng-template>
+    <ng-template let-node pTemplate="file">
+      <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
+    </ng-template>
+  </p-tree>
+
+  @if (treeValue().length === 0 && isFiltering()) {
+    <div class="status">No results for "{{ filterText() }}"</div>
+  }
+
+  <ng-template #row let-node>
+    <div class="row" [class.selected-file]="node.data.kind === 'file' && store.selectedFileId() === node.data.id">
+      @if (node.data.kind === 'folder' && editingId() === node.data.id) {
+        <input
+          pInputText
+          class="rename-input"
+          [ngModel]="editingValue()"
+          (ngModelChange)="editingValue.set($event)"
+          (keydown.enter)="commitRename(node.data.id)"
+          (keydown.escape)="cancelRename()"
+          autofocus
+        />
+        <button
+          pButton
+          icon="pi pi-check"
+          text
+          rounded
+          size="small"
+          severity="success"
+          class="confirm-btn"
+          (click)="commitRename(node.data.id); $event.stopPropagation()"
+        ></button>
+      } @else {
+        <span
+          class="label"
+          (dblclick)="
+            node.data.kind === 'folder' &&
+              startRename(node.data.id, node.label)
+          "
+        >
+          {{ node.label }}
+        </span>
+      }
+
+      @if (node.data.kind === 'file' && node.data.layout) {
+        <span class="meta">
+          updated {{ node.data.layout.lastUpdated | date: 'MMM d, HH:mm' }}
+          · viewed
+          {{ node.data.layout.lastViewDate | date: 'MMM d, HH:mm' }}
+        </span>
+      }
+
+      <span class="actions">
+        @if (node.data.kind === 'folder' && editingId() !== node.data.id) {
+          <button
+            pButton
+            icon="pi pi-folder-plus"
+            text
+            rounded
+            size="small"
+            pTooltip="Add subfolder"
+            (click)="onAddFolder(node.data.id); $event.stopPropagation()"
+          ></button>
+          <button
+            pButton
+            icon="pi pi-pencil"
+            text
+            rounded
+            size="small"
+            pTooltip="Rename"
+            (click)="startRename(node.data.id, node.label); $event.stopPropagation()"
+          ></button>
+        }
+        <button
+          pButton
+          icon="pi pi-trash"
+          text
+          rounded
+          size="small"
+          severity="danger"
+          pTooltip="Delete"
+          (click)="onDelete(node.data); $event.stopPropagation()"
+        ></button>
+      </span>
+    </div>
+  </ng-template>
+</div>

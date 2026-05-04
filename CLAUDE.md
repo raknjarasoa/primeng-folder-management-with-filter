@@ -6,70 +6,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start          # dev server at http://localhost:4200
-npm run build      # production build → dist/folder-management/
-npm run watch      # incremental dev build (no server)
+npm run build      # production build of both library and app
 ```
-
-No test runner is configured; there are no test files.
 
 ## Architecture
 
-Angular 19 + NgRx SignalStore + PrimeNG `<p-tree>`. Standalone components, OnPush, no routing.
+Angular 19+ + NgRx SignalStore + PrimeNG `<p-tree>`.
+The core logic resides in a dedicated, multi-instance Angular library: `layout-folder-management`.
 
 ### Two-source data model
 
-The tree is fed by two separate mock endpoints in `FolderApiService`:
+The tree is fed by two separate models passed to the component via Angular `input()`s:
 
 | Source | Shape | Role |
 |---|---|---|
-| `fetchSessions()` | `SessionNode[]` (hierarchical) | Folder structure — source of truth for tree shape |
-| `fetchViews()` | `ViewMeta[]` (flat) | File metadata (name, timestamps) — joined to leaves by `id` |
+| `sessions` | `SessionNode[]` (hierarchical) | Folder structure — source of truth for tree shape |
+| `layouts` | `Layout[]` (flat) | File metadata (name, timestamps) — joined to leaves by `id` |
 
-These are kept separate so the hierarchy (`sessions`) and file metadata (`viewsById`) can be updated independently. The store joins them at projection time via a `computed` signal (`treeNodes`), which is what `<p-tree>` consumes.
+These are kept separate so the hierarchy (`sessions`) and file metadata (`layoutsById`) can be updated independently. The store joins them at projection time via a `computed` signal (`treeNodes`).
 
 ### State → UI flow
 
+The library's `FolderTreeComponent` is a "dumb" component that relies on its internal SignalStore.
+
 ```
-FolderApiService.fetchSessions()  ──┐
-                                    ├─> patchState ─> sessions: SessionNode[]   ─┐
-FolderApiService.fetchViews()     ──┘               viewsById: Record<id,View>  ─┤
-                                                    expandedKeys: Set<string>    ─┤
-                                                                                  │
-                                         withComputed → treeNodes (TreeNode[]) <─┘
-                                                │
-                                         <p-tree [value]="treeNodes()">
+Parent App (Data Fetching)
+  │
+  ├── [sessions] ───┐
+  ├── [layouts]  ───┤
+  │                 ▼
+  │          Component inputs() -> effect() calls store.initData()
+  │                 │
+  │                 ▼
+  │          NgRx SignalStore (State: sessions, layoutsById, selectedFileId)
+  │                 │
+  │                 ▼
+  │          linkedSignal treeValue (resolves treeNodes, applies filters, maintains expand state, wires parent references)
+  │                 │
+  │                 ▼
+  │          <p-tree [value]="treeValue()">
 ```
 
-The component never writes to `treeNodes`. All mutations (drag-drop, delete, rename) call store methods that update `sessions`, and `treeNodes` recomputes automatically.
+### Multi-Instance capability
+
+- The `FolderTreeStore` is provided at the Component level (`providers: [FolderTreeStore]`), meaning each `<app-folder-tree>` creates its own isolated sandbox.
+- The parent application (`app.component.ts`) fetches the data using `FolderApiService` and injects it into multiple instances to demonstrate parallel independence.
 
 ### Expanded state preservation
 
-`expandedKeys` (a `Set<string>`) in the store tracks which tree nodes are expanded. The component syncs PrimeNG's `(onNodeExpand)` / `(onNodeCollapse)` events to this set. During projection, each folder node's `expanded` property is restored from `expandedKeys`, so the tree retains its open/closed state across any re-render (drag-drop, rename, delete).
-
-### Key files
-
-- `src/app/models/folder-tree.models.ts` — `SessionNode`, `ViewMeta`, `NodeData` types
-- `src/app/services/folder-api.service.ts` — mock for the two endpoints; swap for `HttpClient` calls in production
-- `src/app/store/tree-helpers.ts` — pure functions on `SessionNode[]`: `findLocation`, `removeNode`, `insertNode`, `renameFolder`, `isAncestorOrSelf`. No Angular dependencies; testable in isolation.
-- `src/app/store/folder-tree.store.ts` — NgRx `signalStore` with `load` (rxMethod), `toggleExpanded`, `moveNode`, `deleteNode`, `renameFolder`, and the `treeNodes` computed projection
-- `src/app/components/folder-tree.component.ts` — sole UI component; injects `FolderTreeStore`, owns local rename signals (`editingId`, `editingValue`)
+Because PrimeNG mutates the tree in place, the component uses Angular v19's `linkedSignal` to bridge the gap.
+When the `treeNodes` store projection changes, `linkedSignal` generates a new array using `deepCopyWithExpanded`, manually recreating the `expanded` boolean values based on the previously expanded keys, and explicitly setting the `parent` object reference so native PrimeNG drops work properly.
 
 ### Drag-drop semantics
 
-PrimeNG mutates its internal tree in-place before firing `(onNodeDrop)`. Because `treeNodes` is a derived signal, that mutation is discarded on the next render. The component reads back PrimeNG's post-mutation tree (`dragNode.parent`, sibling array) to determine the final position, then calls `store.moveNode(draggedId, targetFolderId, newIndex)`.
+PrimeNG mutates its internal tree in-place. Because `treeValue` is a `linkedSignal`, we block it from eagerly overriding the DOM by using a `skipNextSync` flag on drop. We then compute the new hierarchical position and call `store.moveNode(...)`.
 
-`moveNode` enforces two invariants via `tree-helpers`:
-1. Cycle prevention — a folder cannot be dropped into itself or any descendant (`isAncestorOrSelf`)
-2. Files cannot receive drops — `droppable: false` is set during projection; any leak falls back to `store.load()` to reset
+### Key files
 
-On successful move, the target folder is auto-expanded so the user sees where the node landed.
-
-### Rename UX
-
-- Double-click a folder label or click the pencil icon to enter rename mode
-- During editing: the pencil icon is replaced by a green check (✓) button to confirm
-- Press Enter or click ✓ to commit; press Escape to cancel
-
-### Adding a real HTTP backend
-
-Replace the `of(...).pipe(delay(...))` observables in `FolderApiService` with `HttpClient` calls. The store (`rxMethod` with `forkJoin`) and projection logic require no changes.
+- `projects/layout-folder-management/src/lib/models/folder-tree.models.ts` — `SessionNode`, `Layout`, `NodeData` types
+- `projects/layout-folder-management/src/lib/store/tree-helpers.ts` — pure functions on `SessionNode[]` using `structuredClone`.
+- `projects/layout-folder-management/src/lib/store/folder-tree.store.ts` — Component-scoped NgRx `signalStore`.
+- `projects/layout-folder-management/src/lib/components/folder-tree.component.ts` — UI using `linkedSignal`, `input()`, and `output()`.
+- `src/app/services/folder-api.service.ts` — Mock backend in the main app providing test data.

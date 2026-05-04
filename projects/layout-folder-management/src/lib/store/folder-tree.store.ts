@@ -1,22 +1,18 @@
-import { computed, inject } from '@angular/core';
+import { computed } from '@angular/core';
 import {
   patchState,
   signalStore,
   withComputed,
-  withHooks,
   withMethods,
   withState,
 } from '@ngrx/signals';
-import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { pipe, switchMap, tap, forkJoin } from 'rxjs';
 import { TreeNode } from 'primeng/api';
 
 import {
   NodeData,
   SessionNode,
-  ViewMeta,
+  Layout,
 } from '../models/folder-tree.models';
-import { FolderApiService } from '../services/folder-api.service';
 import {
   addFolder,
   collectAncestorIds,
@@ -26,48 +22,27 @@ import {
   renameFolder,
 } from './tree-helpers';
 
-// ----------------------------------------------------------------------------
-// State shape
-// ----------------------------------------------------------------------------
 type State = {
-  /** Persisted tree structure — source of truth for hierarchy. */
   sessions: SessionNode[];
-  /** Flat view metadata, keyed by id for O(1) lookup during projection. */
-  viewsById: Record<string, ViewMeta>;
-  /** Currently selected (active) file id. */
+  layoutsById: Record<string, Layout>;
   selectedFileId: string | null;
-  loading: boolean;
-  error: string | null;
 };
 
 const initialState: State = {
   sessions: [],
-  viewsById: {},
+  layoutsById: {},
   selectedFileId: null,
-  loading: false,
-  error: null,
 };
 
-// ----------------------------------------------------------------------------
-// Store
-// ----------------------------------------------------------------------------
 export const FolderTreeStore = signalStore(
-  { providedIn: 'root' },
   withState(initialState),
 
-  /**
-   * `treeNodes` is the read-only projection consumed by the component.
-   * It joins sessions (hierarchy) with viewsById (file metadata).
-   */
-  withComputed(({ sessions, viewsById }) => ({
+  withComputed(({ sessions, layoutsById }) => ({
     treeNodes: computed<TreeNode<NodeData>[]>(() =>
-      toTreeNodes(sessions(), viewsById()),
+      toTreeNodes(sessions(), layoutsById()),
     ),
   })),
 
-  /**
-   * Ancestor keys to auto-expand when revealing the selected file.
-   */
   withComputed(({ sessions, selectedFileId }) => ({
     selectedFileAncestors: computed<string[]>(() => {
       const fileId = selectedFileId();
@@ -76,49 +51,18 @@ export const FolderTreeStore = signalStore(
     }),
   })),
 
-  withMethods((store, api = inject(FolderApiService)) => ({
-    /** Load both endpoints in parallel and join into store state. */
-    load: rxMethod<void>(
-      pipe(
-        tap(() => patchState(store, { loading: true, error: null })),
-        switchMap(() =>
-          forkJoin({
-            sessions: api.fetchSessions(),
-            views: api.fetchViews(),
-          }).pipe(
-            tap({
-              next: ({ sessions, views }) => {
-                const viewsById = Object.fromEntries(
-                  views.map((v) => [v.id, v]),
-                );
-                patchState(store, {
-                  sessions,
-                  viewsById,
-                  loading: false,
-                  // Default: select a nested file so tree auto-expands to it.
-                  selectedFileId: store.selectedFileId() ?? 'v-003',
-                });
-              },
-              error: (err) =>
-                patchState(store, {
-                  loading: false,
-                  error: err?.message ?? 'Failed to load folder tree',
-                }),
-            }),
-          ),
-        ),
-      ),
-    ),
+  withMethods((store) => ({
+    initData(sessions: SessionNode[], layouts: Layout[]): void {
+      const layoutsById = Object.fromEntries(
+        layouts.map((l) => [l.id, l]),
+      );
+      patchState(store, { sessions, layoutsById });
+    },
 
-    /** Select a file (or deselect if same). */
     selectFile(fileId: string | null): void {
       patchState(store, { selectedFileId: fileId });
     },
 
-    /**
-     * Move a node into a folder (or root if `targetFolderId` is null).
-     * `index` is the final destination position in the target's child list.
-     */
     moveNode(
       draggedId: string,
       targetFolderId: string | null,
@@ -126,7 +70,6 @@ export const FolderTreeStore = signalStore(
     ): void {
       const current = store.sessions();
 
-      // Cycle prevention: dropping a folder into itself or a descendant.
       if (
         targetFolderId !== null &&
         isAncestorOrSelf(current, draggedId, targetFolderId)
@@ -141,16 +84,13 @@ export const FolderTreeStore = signalStore(
       patchState(store, { sessions: next });
     },
 
-    /** Delete a node (folder or file) by id. */
     deleteNode(id: string): void {
       const { forest } = removeNode(store.sessions(), id);
-      // If deleting the selected file, deselect.
       const patch: Partial<State> = { sessions: forest };
       if (store.selectedFileId() === id) patch.selectedFileId = null;
       patchState(store, patch);
     },
 
-    /** Rename a folder. Files are not renamable here (they derive from views). */
     renameFolder(id: string, newName: string): void {
       const trimmed = newName.trim();
       if (!trimmed) return;
@@ -159,7 +99,6 @@ export const FolderTreeStore = signalStore(
       });
     },
 
-    /** Add a new empty folder. Returns the generated id. */
     addFolder(parentFolderId: string | null, name: string): string {
       const { forest, newId } = addFolder(
         store.sessions(),
@@ -170,27 +109,18 @@ export const FolderTreeStore = signalStore(
       return newId;
     },
   })),
-
-  withHooks({
-    onInit(store) {
-      store.load();
-    },
-  }),
 );
 
-// ----------------------------------------------------------------------------
-// Projection: SessionNode[] + viewsById -> PrimeNG TreeNode[]
-// ----------------------------------------------------------------------------
 function toTreeNodes(
   sessions: SessionNode[],
-  viewsById: Record<string, ViewMeta>,
+  layoutsById: Record<string, Layout>,
 ): TreeNode<NodeData>[] {
-  return sessions.map((s) => sessionToTreeNode(s, viewsById));
+  return sessions.map((s) => sessionToTreeNode(s, layoutsById));
 }
 
 function sessionToTreeNode(
   s: SessionNode,
-  viewsById: Record<string, ViewMeta>,
+  layoutsById: Record<string, Layout>,
 ): TreeNode<NodeData> {
   if (s.kind === 'folder') {
     return {
@@ -199,20 +129,18 @@ function sessionToTreeNode(
       icon: 'pi pi-folder',
       droppable: true,
       draggable: true,
-      // Empty folder still needs `children: []` so PrimeNG accepts drops into it.
-      children: (s.children ?? []).map((c) => sessionToTreeNode(c, viewsById)),
+      children: (s.children ?? []).map((c) => sessionToTreeNode(c, layoutsById)),
       data: { id: s.id, kind: 'folder' },
     };
   }
-  // File: pull joined metadata; gracefully degrade if a view is missing.
-  const view = viewsById[s.id];
+  const layout = layoutsById[s.id];
   return {
     key: s.id,
-    label: view?.name ?? `(missing view: ${s.id})`,
+    label: layout?.name ?? `(missing layout: ${s.id})`,
     icon: 'pi pi-file',
-    droppable: false, // files cannot receive drops
+    droppable: false,
     draggable: true,
     leaf: true,
-    data: { id: s.id, kind: 'file', view },
+    data: { id: s.id, kind: 'file', layout },
   };
 }
