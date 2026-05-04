@@ -109,11 +109,11 @@ export class FolderTreeComponent {
     // 1. Sync Inputs -> Store
     effect(() => {
       this.store.initData(this.sessions(), this.layouts());
-    }, { allowSignalWrites: true });
+    });
 
     effect(() => {
       this.store.selectFile(this.selectedFileId());
-    }, { allowSignalWrites: true });
+    });
 
     // 2. Sync Store -> Outputs
     effect(() => {

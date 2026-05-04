@@ -7,6 +7,8 @@ Context for Claude Code (and other AI assistants) working in this repository.
 ```bash
 npm start       # dev server at http://localhost:4200
 npm run build   # production build (library + app)
+npm test        # run all tests (vitest)
+npm run test:watch  # watch mode
 ```
 
 ## Architecture

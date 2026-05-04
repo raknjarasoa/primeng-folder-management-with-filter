@@ -9,6 +9,8 @@ A reusable Angular 19+ folder-tree widget built with **PrimeNG `<p-tree>`** and 
 ```bash
 npm install
 npm start        # http://localhost:4200
+npm test         # run all tests
+npm run test:watch  # watch mode
 ```
 
 ## How it works
@@ -61,3 +63,13 @@ src/app/
 ├── app.config.ts                   # Zoneless + PrimeNG Aura theme
 └── services/folder-api.service.ts  # Mock data
 ```
+
+## Testing
+
+Tests use **Vitest** with `@analogjs/vite-plugin-angular` for Angular template compilation.
+
+| Test file | What it covers |
+|-----------|----------------|
+| `store/tree-helpers.spec.ts` | Pure function unit tests (32 tests) |
+| `store/folder-tree.store.spec.ts` | NgRx SignalStore via TestBed (23 tests) |
+| `components/folder-tree.component.spec.ts` | Component integration tests (18 tests) |
