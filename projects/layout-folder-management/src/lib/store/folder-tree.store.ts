@@ -9,9 +9,9 @@ import {
 import { TreeNode } from 'primeng/api';
 
 import {
+  Layout,
   NodeData,
   SessionNode,
-  Layout,
 } from '../models/folder-tree.models';
 import {
   addFolder,
@@ -110,6 +110,8 @@ export const FolderTreeStore = signalStore(
     },
   })),
 );
+
+export type FolderTreeStore = InstanceType<typeof FolderTreeStore>;
 
 function toTreeNodes(
   sessions: SessionNode[],
