@@ -170,7 +170,7 @@ export class FolderTreeComponent {
         targetFolderId,
         index,
       );
-    }, 0);
+    }, 50);
   }
 
   private findNodeInTree(
