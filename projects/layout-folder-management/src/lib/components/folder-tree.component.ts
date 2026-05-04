@@ -59,7 +59,6 @@ export class FolderTreeComponent {
   
   protected readonly isFiltering = computed(() => this.filterText().trim().length > 0);
 
-  private skipNextSync = false;
   private isInitialLoad = true;
 
   // --- Linked Signal for Tree Data ---
@@ -75,13 +74,6 @@ export class FolderTreeComponent {
       selectedId: this.store.selectedFileId(),
     }),
     computation: (source, previous) => {
-      // If we just mutated the tree via drag-drop, keep the existing array 
-      // (PrimeNG already updated it) to avoid jarring re-renders.
-      if (this.skipNextSync) {
-        this.skipNextSync = false;
-        return previous ? previous.value : [];
-      }
-
       const expandedKeys = previous ? this.collectExpandedKeys(previous.value) : new Set<string>();
 
       // Auto-expand to selected file on initial load
@@ -154,26 +146,48 @@ export class FolderTreeComponent {
     const dragNode = event.dragNode as TreeNode<NodeData> | undefined;
     if (!dragNode?.data) return;
 
-    const draggedId = dragNode.data.id;
-    const newParent = dragNode.parent as TreeNode<NodeData> | undefined;
+    // PrimeNG mutates this.treeValue() in place *before* emitting onNodeDrop.
+    // Instead of relying on ambiguous event properties, we find exactly where 
+    // the node ended up in the tree.
+    const location = this.findNodeInTree(this.treeValue(), dragNode);
+    if (!location) return;
 
-    if (newParent && newParent.data?.kind !== 'folder') {
-      return; // Invalid drop
+    const { parent, index } = location;
+
+    if (parent && parent.data?.kind !== 'folder') {
+      return; // Invalid drop (e.g. somehow inside a file)
     }
 
-    const targetFolderId: string | null = newParent?.data?.id ?? null;
-    const siblings: TreeNode<NodeData>[] = newParent?.children ?? this.treeValue();
-    const newIndex = siblings.findIndex((n) => n.data?.id === draggedId);
+    const draggedId = dragNode.data.id;
+    const targetFolderId = parent?.data?.id ?? null;
 
-    // Prevent the linkedSignal computation from rebuilding the tree immediately,
-    // as PrimeNG has already mutated the current treeValue in the DOM.
-    this.skipNextSync = true;
-    
-    this.store.moveNode(
-      draggedId,
-      targetFolderId,
-      newIndex >= 0 ? newIndex : undefined,
-    );
+    // Use setTimeout to decouple the store update and subsequent tree rebuild
+    // from PrimeNG's native synchronous drag-and-drop event loop. This prevents
+    // the UI from hanging/freezing during drop operations.
+    setTimeout(() => {
+      this.store.moveNode(
+        draggedId,
+        targetFolderId,
+        index,
+      );
+    }, 0);
+  }
+
+  private findNodeInTree(
+    nodes: TreeNode<NodeData>[],
+    targetNode: TreeNode<NodeData>,
+    parent: TreeNode<NodeData> | null = null
+  ): { parent: TreeNode<NodeData> | null; index: number } | null {
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i] === targetNode) {
+        return { parent, index: i };
+      }
+      if (nodes[i].children) {
+        const found = this.findNodeInTree(nodes[i].children!, targetNode, nodes[i]);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   protected onAddFolder(parentId: string | null = null): void {
