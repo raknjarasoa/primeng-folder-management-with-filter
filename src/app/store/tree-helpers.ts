@@ -126,3 +126,50 @@ export function findParentId(
   if (!loc) return undefined; // not found
   return loc.parent?.id ?? null;
 }
+
+/**
+ * Add a new empty folder to the forest.
+ *   - If `parentFolderId` is null → root level
+ * Returns the new forest and the generated folder id.
+ */
+export function addFolder(
+  forest: SessionNode[],
+  parentFolderId: string | null,
+  name: string,
+): { forest: SessionNode[]; newId: string } {
+  const newId = `f-${Date.now().toString(36)}`;
+  const folder: SessionNode = { id: newId, kind: 'folder', name, children: [] };
+  const newForest = insertNode(forest, folder, parentFolderId);
+  return { forest: newForest, newId };
+}
+
+/**
+ * Collect all ancestor keys (folder ids) leading to a given node.
+ * Used to auto-expand the tree to reveal a specific node.
+ * Returns keys from root ancestor down to (but excluding) the target.
+ */
+export function collectAncestorIds(
+  forest: SessionNode[],
+  targetId: string,
+): string[] {
+  const path: string[] = [];
+  const found = walkPath(forest, targetId, path);
+  return found ? path : [];
+}
+
+/** Recursive DFS — pushes ancestor ids into `path` if target is found. */
+function walkPath(
+  nodes: SessionNode[],
+  targetId: string,
+  path: string[],
+): boolean {
+  for (const node of nodes) {
+    if (node.id === targetId) return true;
+    if (node.children?.length) {
+      path.push(node.id);
+      if (walkPath(node.children, targetId, path)) return true;
+      path.pop();
+    }
+  }
+  return false;
+}

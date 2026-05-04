@@ -18,6 +18,8 @@ import {
 } from '../models/folder-tree.models';
 import { FolderApiService } from '../services/folder-api.service';
 import {
+  addFolder,
+  collectAncestorIds,
   insertNode,
   isAncestorOrSelf,
   removeNode,
@@ -32,6 +34,8 @@ type State = {
   sessions: SessionNode[];
   /** Flat view metadata, keyed by id for O(1) lookup during projection. */
   viewsById: Record<string, ViewMeta>;
+  /** Currently selected (active) file id. */
+  selectedFileId: string | null;
   loading: boolean;
   error: string | null;
 };
@@ -39,6 +43,7 @@ type State = {
 const initialState: State = {
   sessions: [],
   viewsById: {},
+  selectedFileId: null,
   loading: false,
   error: null,
 };
@@ -60,6 +65,17 @@ export const FolderTreeStore = signalStore(
     ),
   })),
 
+  /**
+   * Ancestor keys to auto-expand when revealing the selected file.
+   */
+  withComputed(({ sessions, selectedFileId }) => ({
+    selectedFileAncestors: computed<string[]>(() => {
+      const fileId = selectedFileId();
+      if (!fileId) return [];
+      return collectAncestorIds(sessions(), fileId);
+    }),
+  })),
+
   withMethods((store, api = inject(FolderApiService)) => ({
     /** Load both endpoints in parallel and join into store state. */
     load: rxMethod<void>(
@@ -75,7 +91,13 @@ export const FolderTreeStore = signalStore(
                 const viewsById = Object.fromEntries(
                   views.map((v) => [v.id, v]),
                 );
-                patchState(store, { sessions, viewsById, loading: false });
+                patchState(store, {
+                  sessions,
+                  viewsById,
+                  loading: false,
+                  // Default: select a nested file so tree auto-expands to it.
+                  selectedFileId: store.selectedFileId() ?? 'v-003',
+                });
               },
               error: (err) =>
                 patchState(store, {
@@ -87,6 +109,11 @@ export const FolderTreeStore = signalStore(
         ),
       ),
     ),
+
+    /** Select a file (or deselect if same). */
+    selectFile(fileId: string | null): void {
+      patchState(store, { selectedFileId: fileId });
+    },
 
     /**
      * Move a node into a folder (or root if `targetFolderId` is null).
@@ -117,7 +144,10 @@ export const FolderTreeStore = signalStore(
     /** Delete a node (folder or file) by id. */
     deleteNode(id: string): void {
       const { forest } = removeNode(store.sessions(), id);
-      patchState(store, { sessions: forest });
+      // If deleting the selected file, deselect.
+      const patch: Partial<State> = { sessions: forest };
+      if (store.selectedFileId() === id) patch.selectedFileId = null;
+      patchState(store, patch);
     },
 
     /** Rename a folder. Files are not renamable here (they derive from views). */
@@ -127,6 +157,17 @@ export const FolderTreeStore = signalStore(
       patchState(store, {
         sessions: renameFolder(store.sessions(), id, trimmed),
       });
+    },
+
+    /** Add a new empty folder. Returns the generated id. */
+    addFolder(parentFolderId: string | null, name: string): string {
+      const { forest, newId } = addFolder(
+        store.sessions(),
+        parentFolderId,
+        name,
+      );
+      patchState(store, { sessions: forest });
+      return newId;
     },
   })),
 
