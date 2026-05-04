@@ -33,6 +33,7 @@ These are kept separate so the hierarchy (`sessions`) and file metadata (`viewsB
 FolderApiService.fetchSessions()  ──┐
                                     ├─> patchState ─> sessions: SessionNode[]   ─┐
 FolderApiService.fetchViews()     ──┘               viewsById: Record<id,View>  ─┤
+                                                    expandedKeys: Set<string>    ─┤
                                                                                   │
                                          withComputed → treeNodes (TreeNode[]) <─┘
                                                 │
@@ -41,12 +42,16 @@ FolderApiService.fetchViews()     ──┘               viewsById: Record<id,V
 
 The component never writes to `treeNodes`. All mutations (drag-drop, delete, rename) call store methods that update `sessions`, and `treeNodes` recomputes automatically.
 
+### Expanded state preservation
+
+`expandedKeys` (a `Set<string>`) in the store tracks which tree nodes are expanded. The component syncs PrimeNG's `(onNodeExpand)` / `(onNodeCollapse)` events to this set. During projection, each folder node's `expanded` property is restored from `expandedKeys`, so the tree retains its open/closed state across any re-render (drag-drop, rename, delete).
+
 ### Key files
 
 - `src/app/models/folder-tree.models.ts` — `SessionNode`, `ViewMeta`, `NodeData` types
 - `src/app/services/folder-api.service.ts` — mock for the two endpoints; swap for `HttpClient` calls in production
 - `src/app/store/tree-helpers.ts` — pure functions on `SessionNode[]`: `findLocation`, `removeNode`, `insertNode`, `renameFolder`, `isAncestorOrSelf`. No Angular dependencies; testable in isolation.
-- `src/app/store/folder-tree.store.ts` — NgRx `signalStore` with `load` (rxMethod), `moveNode`, `deleteNode`, `renameFolder`, and the `treeNodes` computed projection
+- `src/app/store/folder-tree.store.ts` — NgRx `signalStore` with `load` (rxMethod), `toggleExpanded`, `moveNode`, `deleteNode`, `renameFolder`, and the `treeNodes` computed projection
 - `src/app/components/folder-tree.component.ts` — sole UI component; injects `FolderTreeStore`, owns local rename signals (`editingId`, `editingValue`)
 
 ### Drag-drop semantics
@@ -56,6 +61,14 @@ PrimeNG mutates its internal tree in-place before firing `(onNodeDrop)`. Because
 `moveNode` enforces two invariants via `tree-helpers`:
 1. Cycle prevention — a folder cannot be dropped into itself or any descendant (`isAncestorOrSelf`)
 2. Files cannot receive drops — `droppable: false` is set during projection; any leak falls back to `store.load()` to reset
+
+On successful move, the target folder is auto-expanded so the user sees where the node landed.
+
+### Rename UX
+
+- Double-click a folder label or click the pencil icon to enter rename mode
+- During editing: the pencil icon is replaced by a green check (✓) button to confirm
+- Press Enter or click ✓ to commit; press Escape to cancel
 
 ### Adding a real HTTP backend
 

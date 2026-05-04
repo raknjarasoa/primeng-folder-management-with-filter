@@ -1,7 +1,8 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
-  computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -27,7 +28,6 @@ import { NodeData } from '../models/folder-tree.models';
     InputTextModule,
     DatePipe,
   ],
-  // TreeDragDropService is required for drag-drop within a single tree.
   providers: [TreeDragDropService],
   template: `
     <div class="layout">
@@ -35,7 +35,7 @@ import { NodeData } from '../models/folder-tree.models';
         <h1>Folder management</h1>
         <p class="hint">
           Drag to reorder · drop into folders · double-click a folder to rename ·
-          hover for delete
+          hover for actions
         </p>
       </header>
 
@@ -45,12 +45,11 @@ import { NodeData } from '../models/folder-tree.models';
         <div class="status error">{{ store.error() }}</div>
       } @else {
         <p-tree
-          [value]="store.treeNodes()"
+          [value]="treeValue"
           [draggableNodes]="true"
           [droppableNodes]="true"
           draggableScope="folder-tree"
           droppableScope="folder-tree"
-          [validateDrop]="true"
           (onNodeDrop)="onNodeDrop($event)"
           styleClass="tree"
         >
@@ -66,9 +65,7 @@ import { NodeData } from '../models/folder-tree.models';
         <ng-template #row let-node>
           <div class="row">
             <!-- Folder rename inline editor -->
-            @if (
-              node.data.kind === 'folder' && editingId() === node.data.id
-            ) {
+            @if (node.data.kind === 'folder' && editingId() === node.data.id) {
               <input
                 pInputText
                 class="rename-input"
@@ -76,10 +73,18 @@ import { NodeData } from '../models/folder-tree.models';
                 (ngModelChange)="editingValue.set($event)"
                 (keydown.enter)="commitRename(node.data.id)"
                 (keydown.escape)="cancelRename()"
-                (blur)="commitRename(node.data.id)"
-                #renameInput
                 autofocus
               />
+              <button
+                pButton
+                icon="pi pi-check"
+                text
+                rounded
+                size="small"
+                severity="success"
+                class="confirm-btn"
+                (click)="commitRename(node.data.id); $event.stopPropagation()"
+              ></button>
             } @else {
               <span
                 class="label"
@@ -102,7 +107,7 @@ import { NodeData } from '../models/folder-tree.models';
             }
 
             <span class="actions">
-              @if (node.data.kind === 'folder') {
+              @if (node.data.kind === 'folder' && editingId() !== node.data.id) {
                 <button
                   pButton
                   icon="pi pi-pencil"
@@ -214,49 +219,72 @@ import { NodeData } from '../models/folder-tree.models';
         padding: 2px 6px;
         height: 26px;
       }
+
+      .confirm-btn {
+        flex-shrink: 0;
+      }
     `,
   ],
 })
 export class FolderTreeComponent {
   protected readonly store = inject(FolderTreeStore);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  /**
+   * Mutable tree for PrimeNG. We deep-copy from the store only when the
+   * store data actually changes (load, delete, rename). PrimeNG owns this
+   * array and mutates it in place for expand/collapse and drag-drop.
+   */
+  treeValue: TreeNode<NodeData>[] = [];
 
   // -- Local UI state: which folder is being renamed, and its draft value.
   protected readonly editingId = signal<string | null>(null);
   protected readonly editingValue = signal<string>('');
 
+  /** Track whether we should skip the next sync (because we just did a drag-drop). */
+  private skipNextSync = false;
+
+  constructor() {
+    // Sync store → mutable tree whenever the store's projection changes.
+    // This fires on initial load, delete, rename, moveNode, etc.
+    effect(() => {
+      const storeNodes = this.store.treeNodes();
+      if (this.skipNextSync) {
+        this.skipNextSync = false;
+        return;
+      }
+      // Capture which nodes are currently expanded.
+      const expandedKeys = this.collectExpandedKeys(this.treeValue);
+      // Deep copy from store and restore expanded state.
+      this.treeValue = this.deepCopyWithExpanded(storeNodes, expandedKeys);
+      this.cdr.markForCheck();
+    });
+  }
+
   /**
-   * PrimeNG mutates its own input tree IN PLACE before firing onNodeDrop.
-   * The `event.index` semantics are notoriously inconsistent across versions
-   * and drop locations (folder vs. between-siblings, last-position off-by-one,
-   * etc — see PrimeNG issues #9320, #9502, #13592).
-   *
-   * Instead of interpreting the event, we read back PrimeNG's *post-mutation*
-   * tree via `dragNode.parent` and the sibling array. This is the ground
-   * truth of where PrimeNG put the node, which we replicate in store state.
-   *
-   * Cycle prevention is enforced inside moveNode(); if the move is rejected,
-   * the canonical tree re-emits and PrimeNG re-renders the unmoved version.
+   * PrimeNG has already mutated `treeValue` in-place before this fires.
+   * `dragNode.parent` reflects the new parent. We sync to the store,
+   * but skip the effect's re-sync since PrimeNG's tree is already correct.
    */
   protected onNodeDrop(event: TreeNodeDropEvent): void {
     const dragNode = event.dragNode as TreeNode<NodeData> | undefined;
     if (!dragNode?.data) return;
 
     const draggedId = dragNode.data.id;
-    // After PrimeNG's in-place mutation, dragNode.parent is the new parent
-    // (undefined when the node now sits at root level).
     const newParent = dragNode.parent as TreeNode<NodeData> | undefined;
 
-    // Defensive: files cannot be parents. droppable:false should prevent this,
-    // but if PrimeNG ever lets it through, force a state reload to un-do.
+    // Files cannot be parents.
     if (newParent && newParent.data?.kind !== 'folder') {
       this.store.load();
       return;
     }
 
     const targetFolderId: string | null = newParent?.data?.id ?? null;
-    const siblings = newParent?.children ?? this.store.treeNodes();
+    const siblings: TreeNode<NodeData>[] = newParent?.children ?? this.treeValue;
     const newIndex = siblings.findIndex((n) => n.data?.id === draggedId);
 
+    // Tell the effect to skip the next sync — PrimeNG's tree is already correct.
+    this.skipNextSync = true;
     this.store.moveNode(
       draggedId,
       targetFolderId,
@@ -286,5 +314,46 @@ export class FolderTreeComponent {
     if (confirm(`Delete this ${what}?`)) {
       this.store.deleteNode(data.id);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /** Collect keys of expanded nodes from the current mutable tree. */
+  private collectExpandedKeys(nodes: TreeNode<NodeData>[]): Set<string> {
+    const keys = new Set<string>();
+    const walk = (list: TreeNode<NodeData>[]) => {
+      for (const n of list) {
+        if (n.expanded && n.key) keys.add(n.key);
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(nodes);
+    return keys;
+  }
+
+  /** Deep-copy tree nodes and restore expanded state from a keyset. */
+  private deepCopyWithExpanded(
+    nodes: TreeNode<NodeData>[],
+    expandedKeys: Set<string>,
+  ): TreeNode<NodeData>[] {
+    return nodes.map((n) => this.copyNode(n, expandedKeys));
+  }
+
+  private copyNode(
+    node: TreeNode<NodeData>,
+    expandedKeys: Set<string>,
+  ): TreeNode<NodeData> {
+    const copy: TreeNode<NodeData> = { ...node };
+    if (node.key && expandedKeys.has(node.key)) {
+      copy.expanded = true;
+    }
+    if (node.children) {
+      copy.children = node.children.map((c) => this.copyNode(c, expandedKeys));
+    }
+    // PrimeNG sets .parent references internally; don't carry stale ones.
+    delete (copy as any).parent;
+    return copy;
   }
 }

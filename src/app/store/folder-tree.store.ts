@@ -51,9 +51,8 @@ export const FolderTreeStore = signalStore(
   withState(initialState),
 
   /**
-   * `treeNodes` is the read-only projection consumed by <p-tree>.
-   * It joins sessions (hierarchy) with viewsById (file metadata) on the fly.
-   * The tree component never mutates this — all changes go through methods.
+   * `treeNodes` is the read-only projection consumed by the component.
+   * It joins sessions (hierarchy) with viewsById (file metadata).
    */
   withComputed(({ sessions, viewsById }) => ({
     treeNodes: computed<TreeNode<NodeData>[]>(() =>
@@ -91,15 +90,7 @@ export const FolderTreeStore = signalStore(
 
     /**
      * Move a node into a folder (or root if `targetFolderId` is null).
-     * Used both by drag-into-folder and by reorder operations.
-     *
-     * `index` is the FINAL destination position in the target's child list,
-     * i.e. the position we want the node to occupy after the move (as observed
-     * in PrimeNG's post-mutation tree). If omitted, the node is appended.
-     *
-     * Validation:
-     *  - cannot move a folder into its own descendant (cycle)
-     *  - target must be a folder (or null = root); enforced at call site too
+     * `index` is the final destination position in the target's child list.
      */
     moveNode(
       draggedId: string,
@@ -119,8 +110,6 @@ export const FolderTreeStore = signalStore(
       const { forest: without, removed } = removeNode(current, draggedId);
       if (!removed) return;
 
-      // No index adjustment: the caller passes the post-mutation index, which
-      // already accounts for the dragged node's removal-then-reinsertion.
       const next = insertNode(without, removed, targetFolderId, index);
       patchState(store, { sessions: next });
     },
