@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { FolderTreeComponent } from './components/folder-tree.component';
+import { FolderTreeComponent } from 'layout-folder-management';
 
 @Component({
   selector: 'app-root',
