@@ -59,7 +59,7 @@ When the `treeNodes` store projection changes, `linkedSignal` generates a new ar
 
 ### Drag-drop semantics
 
-PrimeNG mutates its internal tree in-place. Because `treeValue` is a `linkedSignal`, we block it from eagerly overriding the DOM by using a `skipNextSync` flag on drop. We then compute the new hierarchical position and call `store.moveNode(...)`.
+PrimeNG mutates its internal tree in-place. Because `treeValue` is a `linkedSignal`, we let the native drag-and-drop event loop resolve before applying state changes. We identify the drop location by parsing the mutated tree structure rather than relying on ambiguous drop event properties. Finally, we execute `store.moveNode(...)` wrapped in a short `setTimeout` to decouple the reactive state update from PrimeNG's synchronous event loop, ensuring a smooth UI.
 
 ### Key files
 

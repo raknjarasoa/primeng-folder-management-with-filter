@@ -45,7 +45,7 @@ The library manages the local UI state using an internal NgRx SignalStore. Chang
 
 PrimeNG mutates its internal copy of the tree on drop natively. 
 Our component bridges this gap gracefully using Angular v19's `linkedSignal`. 
-We capture the `dragNode` and `newParent` from the `(onNodeDrop)` event, explicitly maintain the `parent` property pointers so native array splicing works correctly, and apply the permanent move via `store.moveNode(...)`.
+We capture the `dragNode` from the `(onNodeDrop)` event, locate its new position in the mutated tree, and explicitly maintain `parent` property pointers so native array splicing works correctly. We then apply the permanent move via `store.moveNode(...)` inside a short timeout to decouple state synchronization from the UI animation loop.
 
 The store enforces:
 - Files cannot receive drops (only folders are valid drop targets).

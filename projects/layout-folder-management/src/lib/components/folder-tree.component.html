@@ -8,8 +8,8 @@
   </header>
 
   <div class="toolbar">
-    <div class="search-wrapper">
-      <i class="pi pi-search search-icon"></i>
+    <p-iconField iconPosition="left" class="search-wrapper">
+      <p-inputIcon styleClass="pi pi-search" />
       <input
         pInputText
         class="search-input"
@@ -28,7 +28,7 @@
           (click)="onFilterChange('')"
         ></button>
       }
-    </div>
+    </p-iconField>
     <button
       pButton
       icon="pi pi-folder-plus"
