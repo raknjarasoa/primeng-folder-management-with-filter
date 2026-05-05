@@ -14,8 +14,7 @@
         pInputText
         class="search-input"
         placeholder="Search folders and files…"
-        [ngModel]="filterText()"
-        (ngModelChange)="onFilterChange($event)"
+        [(ngModel)]="filterText"
       />
       @if (filterText()) {
         <button
@@ -70,8 +69,7 @@
         <input
           pInputText
           class="rename-input"
-          [ngModel]="editingValue()"
-          (ngModelChange)="editingValue.set($event)"
+          [(ngModel)]="editingValue"
           (keydown.enter)="commitRename(node.data.id)"
           (keydown.escape)="cancelRename(node.data.id)"
           autofocus
@@ -90,7 +88,7 @@
         <span
           class="label"
           (dblclick)="
-            node.data.kind === 'folder' &&
+            node.data.kind === 'folder' && !node.data.isOther &&
               startRename(node.data.id, node.label)
           "
         >
@@ -103,11 +101,14 @@
           updated {{ node.data.layout.lastUpdated | date: 'MMM d, HH:mm' }}
           · viewed
           {{ node.data.layout.lastViewDate | date: 'MMM d, HH:mm' }}
+          @if (node.data.layout.description) {
+            · {{ node.data.layout.description }}
+          }
         </span>
       }
 
       <span class="actions">
-        @if (node.data.kind === 'folder' && editingId() !== node.data.id) {
+        @if (node.data.kind === 'folder' && editingId() !== node.data.id && !node.data.isOther) {
           <button
             pButton
             icon="pi pi-folder-plus"
@@ -128,16 +129,18 @@
             (click)="startRename(node.data.id, node.label); $event.stopPropagation()"
           ></button>
         }
-        <button
-          pButton
-          icon="pi pi-trash"
-          text
-          rounded
-          size="small"
-          severity="danger"
-          pTooltip="Delete"
-          (click)="onDelete(node.data); $event.stopPropagation()"
-        ></button>
+        @if (!node.data.isOther || node.data.kind === 'file') {
+          <button
+            pButton
+            icon="pi pi-trash"
+            text
+            rounded
+            size="small"
+            severity="danger"
+            pTooltip="Delete"
+            (click)="onDelete(node.data); $event.stopPropagation()"
+          ></button>
+        }
       </span>
     </div>
   </ng-template>

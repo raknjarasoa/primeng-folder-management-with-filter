@@ -86,7 +86,11 @@ export const FolderTreeStore = signalStore(
 
     deleteNode(id: string): void {
       const { forest } = removeNode(store.sessions(), id);
-      const patch: Partial<State> = { sessions: forest };
+      const currentLayouts = { ...store.layoutsById() };
+      if (currentLayouts[id]) {
+        delete currentLayouts[id];
+      }
+      const patch: Partial<State> = { sessions: forest, layoutsById: currentLayouts };
       if (store.selectedFileId() === id) patch.selectedFileId = null;
       patchState(store, patch);
     },
@@ -117,7 +121,66 @@ function toTreeNodes(
   sessions: SessionNode[],
   layoutsById: Record<string, Layout>,
 ): TreeNode<NodeData>[] {
-  return sessions.map((s) => sessionToTreeNode(s, layoutsById));
+  const nodes = sessions.map((s) => sessionToTreeNode(s, layoutsById));
+
+  const sessionFileIds = new Set<string>();
+  const walk = (list: SessionNode[]) => {
+    for (const n of list) {
+      if (n.kind === 'file') sessionFileIds.add(n.id);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(sessions);
+
+  const othersByUsername: Record<string, Layout[]> = {};
+  let hasOthers = false;
+
+  for (const layout of Object.values(layoutsById)) {
+    if (!sessionFileIds.has(layout.id)) {
+      const uname = layout.username || 'Unknown User';
+      if (!othersByUsername[uname]) {
+        othersByUsername[uname] = [];
+      }
+      othersByUsername[uname].push(layout);
+      hasOthers = true;
+    }
+  }
+
+  if (hasOthers) {
+    const userFolders: TreeNode<NodeData>[] = Object.keys(othersByUsername)
+      .sort()
+      .map((uname) => {
+        return {
+          key: `others-${uname}`,
+          label: uname,
+          icon: 'pi pi-folder',
+          droppable: false,
+          draggable: false,
+          children: othersByUsername[uname].map((layout) => ({
+            key: layout.id,
+            label: layout.name,
+            icon: 'pi pi-file',
+            droppable: false,
+            draggable: false,
+            leaf: true,
+            data: { id: layout.id, kind: 'file', layout, isOther: true },
+          })),
+          data: { id: `others-${uname}`, kind: 'folder', isOther: true },
+        };
+      });
+
+    nodes.push({
+      key: 'others-root',
+      label: 'Others',
+      icon: 'pi pi-folder',
+      droppable: false,
+      draggable: false,
+      children: userFolders,
+      data: { id: 'others-root', kind: 'folder', isOther: true },
+    });
+  }
+
+  return nodes;
 }
 
 function sessionToTreeNode(

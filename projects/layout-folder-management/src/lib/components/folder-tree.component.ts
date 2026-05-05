@@ -7,9 +7,12 @@ import {
   output,
   signal,
   computed,
+  model,
   linkedSignal,
   untracked,
 } from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { debounceTime } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { TreeModule, TreeNodeDropEvent } from 'primeng/tree';
@@ -44,13 +47,9 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
 })
 export class FolderTreeComponent {
   // --- Data Inputs ---
-  sessions = input<SessionNode[]>([]);
+  sessions = model.required<SessionNode[]>();
   layouts = input<Layout[]>([]);
-  selectedFileId = input<string | null>(null);
-
-  // --- Outputs ---
-  sessionsChange = output<SessionNode[]>();
-  selectedFileIdChange = output<string | null>();
+  selectedFileId = model.required<string | null>();
 
   protected readonly store = inject(FolderTreeStore);
   protected readonly confirmationService = inject(ConfirmationService);
@@ -60,7 +59,12 @@ export class FolderTreeComponent {
   protected readonly editingValue = signal<string>('');
   protected readonly filterText = signal<string>('');
   
-  protected readonly isFiltering = computed(() => this.filterText().trim().length > 0);
+  protected readonly debouncedFilterText = toSignal(
+    toObservable(this.filterText).pipe(debounceTime(300)),
+    { initialValue: '' }
+  );
+  
+  protected readonly isFiltering = computed(() => this.debouncedFilterText().trim().length > 0);
 
   private isInitialLoad = true;
 
@@ -73,7 +77,7 @@ export class FolderTreeComponent {
   >({
     source: () => ({
       nodes: this.store.treeNodes(),
-      filter: this.filterText().trim().toLowerCase(),
+      filter: this.debouncedFilterText().trim().toLowerCase(),
       selectedId: this.store.selectedFileId(),
     }),
     computation: (source, previous) => {
@@ -109,11 +113,11 @@ export class FolderTreeComponent {
     // 1. Sync Inputs -> Store
     effect(() => {
       this.store.initData(this.sessions(), this.layouts());
-    });
+    }, { allowSignalWrites: true });
 
     effect(() => {
       this.store.selectFile(this.selectedFileId());
-    });
+    }, { allowSignalWrites: true });
 
     // 2. Sync Store -> Outputs
     effect(() => {
@@ -122,11 +126,15 @@ export class FolderTreeComponent {
       
       untracked(() => {
         if (!this.isInitialLoad) {
-          this.sessionsChange.emit(currentSessions);
-          this.selectedFileIdChange.emit(selectedId);
+          if (this.sessions() !== currentSessions) {
+            this.sessions.set(currentSessions);
+          }
+          if (this.selectedFileId() !== selectedId) {
+            this.selectedFileId.set(selectedId);
+          }
         }
       });
-    });
+    }, { allowSignalWrites: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -283,7 +291,14 @@ export class FolderTreeComponent {
   ): TreeNode<NodeData>[] {
     const result: TreeNode<NodeData>[] = [];
     for (const node of nodes) {
-      const labelMatch = (node.label ?? '').toLowerCase().includes(query);
+      let searchableText = (node.label ?? '').toLowerCase();
+      if (node.data?.kind === 'file' && node.data.layout) {
+        const l = node.data.layout;
+        searchableText += ' ' + (l.username ?? '').toLowerCase();
+        searchableText += ' ' + (l.description ?? '').toLowerCase();
+      }
+
+      const labelMatch = searchableText.includes(query);
       if (node.children?.length) {
         const filteredChildren = this.filterTree(node.children, query);
         if (labelMatch || filteredChildren.length > 0) {

@@ -48,6 +48,12 @@ export class FolderApiService {
       { id: 'v-005', name: 'VaR by book', lastUpdated: '2026-05-03T18:45:00Z', lastViewDate: '2026-05-04T08:15:00Z' },
       { id: 'v-006', name: 'Stress scenarios Q2', lastUpdated: '2026-04-30T11:00:00Z', lastViewDate: '2026-05-02T13:00:00Z' },
       { id: 'v-007', name: 'Daily P&L summary', lastUpdated: '2026-05-04T06:00:00Z', lastViewDate: '2026-05-04T09:00:00Z' },
+      
+      // Data not present in sessions1 (Will be grouped under "Others")
+      { id: 'v-other1', name: 'John Doe Report', lastUpdated: '2026-05-04T10:12:00Z', lastViewDate: '2026-05-04T10:15:00Z', username: 'John', description: 'Daily report' },
+      { id: 'v-other2', name: 'John Doe Summary', lastUpdated: '2026-05-04T11:30:00Z', lastViewDate: '2026-05-04T11:45:00Z', username: 'John', description: 'Summary data' },
+      { id: 'v-other3', name: 'Alice Draft', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z', username: 'Alice', description: 'Working draft' },
+      { id: 'v-other4', name: 'Unknown Data', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z' },
     ];
     return of(layouts).pipe(delay(120));
   }
