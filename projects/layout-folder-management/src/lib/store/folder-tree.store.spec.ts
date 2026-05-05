@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Component, inject } from '@angular/core';
 
 import { FolderTreeStore } from './folder-tree.store';
-import { SessionNode, Layout } from '../models/folder-tree.models';
+import { SessionNode, FolderNode, Layout } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Shared test data
@@ -104,7 +104,7 @@ describe('FolderTreeStore', () => {
 
     it('shows "(untitled folder)" for folder without name', () => {
       const sessions: SessionNode[] = [
-        { id: 'f1', kind: 'folder', children: [] },
+        { id: 'f1', kind: 'folder', name: '', children: [] },
       ];
       store.initData(sessions, []);
       const nodes = store.treeNodes();
@@ -180,8 +180,8 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.moveNode('v-003', 'f-equity');
 
-      const equity = store.sessions()[0].children!.find(c => c.id === 'f-equity')!;
-      expect(equity.children!.some(c => c.id === 'v-003')).toBe(true);
+      const equity = (store.sessions()[0] as FolderNode).children!.find(c => c.id === 'f-equity')!;
+      expect(((equity as FolderNode).children)!.some(c => c.id === 'v-003')).toBe(true);
     });
 
     it('prevents cycle (folder into itself)', () => {
@@ -218,7 +218,7 @@ describe('FolderTreeStore', () => {
       store.deleteNode('v-001');
 
       const trading = store.sessions()[0];
-      expect(trading.children!.length).toBe(1); // only f-equity
+      expect(((trading as FolderNode).children)!.length).toBe(1); // only f-equity
     });
 
     it('clears selectedFileId when the selected node is deleted', () => {
@@ -247,21 +247,21 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', 'Renamed');
 
-      expect(store.sessions()[0].name).toBe('Renamed');
+      expect(((store.sessions()[0] as FolderNode).name)).toBe('Renamed');
     });
 
     it('trims whitespace', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '  Trimmed  ');
 
-      expect(store.sessions()[0].name).toBe('Trimmed');
+      expect(((store.sessions()[0] as FolderNode).name)).toBe('Trimmed');
     });
 
     it('ignores empty name', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '   ');
 
-      expect(store.sessions()[0].name).toBe('Trading');
+      expect(((store.sessions()[0] as FolderNode).name)).toBe('Trading');
     });
   });
 
@@ -276,7 +276,7 @@ describe('FolderTreeStore', () => {
 
       expect(newId).toBeTruthy();
       expect(store.sessions()[0].id).toBe(newId);
-      expect(store.sessions()[0].name).toBe('New Folder');
+      expect(((store.sessions()[0] as FolderNode).name)).toBe('New Folder');
     });
 
     it('adds a subfolder inside an existing folder', () => {
@@ -284,8 +284,8 @@ describe('FolderTreeStore', () => {
       const newId = store.addFolder('f-trading', 'Subfolder');
 
       const trading = store.sessions()[0];
-      expect(trading.children![0].id).toBe(newId);
-      expect(trading.children![0].name).toBe('Subfolder');
+      expect(((trading as FolderNode).children)![0].id).toBe(newId);
+      expect((((trading as FolderNode).children)![0] as FolderNode).name).toBe('Subfolder');
     });
   });
 });

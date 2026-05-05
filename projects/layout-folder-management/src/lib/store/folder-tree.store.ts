@@ -9,6 +9,8 @@ import {
 import { TreeNode } from 'primeng/api';
 
 import {
+  isFileNode,
+  isFolderNode,
   Layout,
   NodeData,
   SessionNode,
@@ -126,8 +128,8 @@ function toTreeNodes(
   const sessionFileIds = new Set<string>();
   const walk = (list: SessionNode[]) => {
     for (const n of list) {
-      if (n.kind === 'file') sessionFileIds.add(n.id);
-      if (n.children) walk(n.children);
+      if (isFileNode(n)) sessionFileIds.add(n.id);
+      if (isFolderNode(n) && n.children) walk(n.children);
     }
   };
   walk(sessions);
@@ -190,11 +192,11 @@ function sessionToTreeNode(
   if (s.kind === 'folder') {
     return {
       key: s.id,
-      label: s.name ?? '(untitled folder)',
+      label: s.name || '(untitled folder)',
       icon: 'pi pi-folder',
       droppable: true,
       draggable: true,
-      children: (s.children ?? []).map((c) => sessionToTreeNode(c, layoutsById)),
+      children: s.children.map((c) => sessionToTreeNode(c, layoutsById)),
       data: { id: s.id, kind: 'folder' },
     };
   }

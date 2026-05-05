@@ -1,30 +1,29 @@
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   input,
-  output,
-  signal,
-  computed,
-  model,
   linkedSignal,
-  untracked,
+  model,
+  signal,
+  untracked
 } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { debounceTime } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
-import { NgTemplateOutlet, DatePipe } from '@angular/common';
-import { TreeModule, TreeNodeDropEvent } from 'primeng/tree';
+import { ConfirmationService, TreeDragDropService, TreeNode } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
-import { InputTextModule } from 'primeng/inputtext';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
-import { TreeDragDropService, TreeNode, ConfirmationService } from 'primeng/api';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { TreeModule, TreeNodeDropEvent } from 'primeng/tree';
+import { debounceTime } from 'rxjs/operators';
 
+import { Layout, NodeData, SessionNode } from '../models/folder-tree.models';
 import { FolderTreeStore } from '../store/folder-tree.store';
-import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
 
 @Component({
   selector: 'app-folder-tree',
@@ -51,7 +50,7 @@ export class FolderTreeComponent {
   layouts = input<Layout[]>([]);
   selectedFileId = model.required<string | null>();
 
-  protected readonly store = inject(FolderTreeStore);
+    readonly store = inject(FolderTreeStore);
   protected readonly confirmationService = inject(ConfirmationService);
 
   // --- Local UI State ---
@@ -113,11 +112,11 @@ export class FolderTreeComponent {
     // 1. Sync Inputs -> Store
     effect(() => {
       this.store.initData(this.sessions(), this.layouts());
-    }, { allowSignalWrites: true });
+    }, );
 
     effect(() => {
       this.store.selectFile(this.selectedFileId());
-    }, { allowSignalWrites: true });
+    }, );
 
     // 2. Sync Store -> Outputs
     effect(() => {
@@ -134,7 +133,7 @@ export class FolderTreeComponent {
           }
         }
       });
-    }, { allowSignalWrites: true });
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -182,6 +181,14 @@ export class FolderTreeComponent {
         index,
       );
     }, 50);
+  }
+
+  protected onDragOverOther(event: DragEvent): void {
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'none';
+    }
+    // Stop propagation so PrimeNG doesn't process it and change the cursor back
+    event.stopPropagation();
   }
 
   private findNodeInTree(

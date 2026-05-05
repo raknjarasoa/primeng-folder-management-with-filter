@@ -64,7 +64,9 @@
   }
 
   <ng-template #row let-node>
-    <div class="row" [class.selected-file]="node.data.kind === 'file' && store.selectedFileId() === node.data.id">
+    <div class="row" 
+         [class.selected-file]="node.data.kind === 'file' && store.selectedFileId() === node.data.id"
+         (dragover)="node.data.isOther ? onDragOverOther($event) : null">
       @if (node.data.kind === 'folder' && editingId() === node.data.id) {
         <input
           pInputText

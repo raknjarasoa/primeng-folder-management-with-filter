@@ -1,4 +1,4 @@
-import { SessionNode } from '../models/folder-tree.models';
+import { isFolderNode, SessionNode } from '../models/folder-tree.models';
 
 export interface NodeLocation {
   node: SessionNode;
@@ -19,7 +19,7 @@ export function findLocation(
     for (let i = 0; i < siblings.length; i++) {
       const node = siblings[i];
       if (node.id === id) return { node, parent, index: i, siblings };
-      if (node.children?.length) {
+      if (isFolderNode(node) && node.children?.length) {
         stack.push({ siblings: node.children, parent: node });
       }
     }
@@ -34,8 +34,8 @@ export function isAncestorOrSelf(
 ): boolean {
   if (ancestorId === descendantId) return true;
   const loc = findLocation(forest, ancestorId);
-  if (!loc || !loc.node.children) return false;
-  return findLocation(loc.node.children, descendantId) !== null;
+  if (!loc || (isFolderNode(loc.node) && !loc.node.children)) return false;
+  return isFolderNode(loc.node) && findLocation(loc.node.children, descendantId) !== null;
 }
 
 export function removeNode(
@@ -111,7 +111,7 @@ function walkPath(
 ): boolean {
   for (const node of nodes) {
     if (node.id === targetId) return true;
-    if (node.children?.length) {
+    if (isFolderNode(node) && node.children?.length) {
       path.push(node.id);
       if (walkPath(node.children, targetId, path)) return true;
       path.pop();

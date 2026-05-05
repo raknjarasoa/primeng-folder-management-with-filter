@@ -4,7 +4,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideExperimentalZonelessChangeDetection } from '@angular/core';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import { SessionNode, Layout } from '../models/folder-tree.models';
+import { SessionNode, Layout, FolderNode } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -66,6 +66,7 @@ describe('FolderTreeComponent', () => {
   it('should render tree nodes when inputs are set', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -77,6 +78,7 @@ describe('FolderTreeComponent', () => {
   it('should project correct labels from layouts', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -95,6 +97,7 @@ describe('FolderTreeComponent', () => {
   it('should set selectedNode when selectedFileId input is provided', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.componentRef.setInput('selectedFileId', 'file-1');
     fixture.detectChanges();
     await fixture.whenStable();
@@ -108,6 +111,7 @@ describe('FolderTreeComponent', () => {
   it('should auto-expand ancestor folders for a selected file', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.componentRef.setInput('selectedFileId', 'file-2');
     fixture.detectChanges();
     await fixture.whenStable();
@@ -121,6 +125,7 @@ describe('FolderTreeComponent', () => {
   it('should return null selectedNode when no file is selected', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -135,11 +140,14 @@ describe('FolderTreeComponent', () => {
   it('should filter tree nodes by search text', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     component['filterText'].set('alpha');
+    fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
     fixture.detectChanges();
 
     const nodes = component.treeValue();
@@ -152,11 +160,14 @@ describe('FolderTreeComponent', () => {
   it('should expand all nodes when filtering', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     component['filterText'].set('beta');
+    fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
     fixture.detectChanges();
 
     const nodes = component.treeValue();
@@ -171,11 +182,14 @@ describe('FolderTreeComponent', () => {
   it('should return empty tree when filter matches nothing', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     component['filterText'].set('zzzzzzzzz');
+    fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
     fixture.detectChanges();
 
     expect(component.treeValue().length).toBe(0);
@@ -185,11 +199,14 @@ describe('FolderTreeComponent', () => {
   it('should disable drag/drop when filtering', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     component['filterText'].set('alpha');
+    fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
     fixture.detectChanges();
 
     expect(component['isFiltering']()).toBe(true);
@@ -202,6 +219,7 @@ describe('FolderTreeComponent', () => {
   it('should enter rename mode via startRename', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -215,6 +233,7 @@ describe('FolderTreeComponent', () => {
   it('should clear "(untitled folder)" placeholder on startRename', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -227,6 +246,7 @@ describe('FolderTreeComponent', () => {
   it('should commit rename and update the store', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -236,12 +256,13 @@ describe('FolderTreeComponent', () => {
     component['commitRename']('f-root');
 
     expect(component['editingId']()).toBeNull();
-    expect(component.store.sessions()[0].name).toBe('New Name');
+    expect((component.store.sessions()[0] as FolderNode).name).toBe('New Name');
   });
 
   it('should not commit rename with empty name', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -253,7 +274,7 @@ describe('FolderTreeComponent', () => {
     // Still in editing mode
     expect(component['editingId']()).toBe('f-root');
     // Store unchanged
-    expect(component.store.sessions()[0].name).toBe('Root Folder');
+    expect((component.store.sessions()[0] as FolderNode).name).toBe('Root Folder');
   });
 
   // -----------------------------------------------------------------------
@@ -263,6 +284,7 @@ describe('FolderTreeComponent', () => {
   it('should add folder at root and enter editing mode', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -278,6 +300,7 @@ describe('FolderTreeComponent', () => {
   it('should remove ephemeral folder on cancel', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -296,14 +319,15 @@ describe('FolderTreeComponent', () => {
   it('should add subfolder inside a parent folder', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const childrenBefore = component.store.sessions()[0].children!.length;
+    const childrenBefore = (component.store.sessions()[0] as FolderNode).children.length;
     component['onAddFolder']('f-root');
 
-    expect(component.store.sessions()[0].children!.length).toBe(childrenBefore + 1);
+    expect((component.store.sessions()[0] as FolderNode).children.length).toBe(childrenBefore + 1);
     expect(component['editingId']()).not.toBeNull();
   });
 
@@ -314,6 +338,7 @@ describe('FolderTreeComponent', () => {
   it('should call confirmationService.confirm on delete', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', null);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -330,7 +355,9 @@ describe('FolderTreeComponent', () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function flattenLabels(nodes: any[]): string[] {
+import { TreeNode } from 'primeng/api';
+
+function flattenLabels(nodes: TreeNode[]): string[] {
   const result: string[] = [];
   for (const n of nodes) {
     if (n.label) result.push(n.label);
