@@ -53,6 +53,9 @@ describe('FolderTreeComponent', () => {
 
     fixture = TestBed.createComponent(FolderTreeComponent);
     component = fixture.componentInstance;
+
+    fixture.componentRef.setInput('sessions', []);
+    fixture.componentRef.setInput('selectedFileId', null);
   });
 
   // -----------------------------------------------------------------------
@@ -141,6 +144,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('alpha');
     fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
 
     const nodes = component.treeValue();
     // Should show only matching nodes: Root Folder (ancestor) containing Alpha Report
@@ -158,6 +162,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('beta');
     fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
 
     const nodes = component.treeValue();
     // All ancestor folders should be expanded during filter
@@ -177,6 +182,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('zzzzzzzzz');
     fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
 
     expect(component.treeValue().length).toBe(0);
     expect(component['isFiltering']()).toBe(true);
@@ -191,6 +197,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('alpha');
     fixture.detectChanges();
+    await new Promise(r => setTimeout(r, 350));
 
     expect(component['isFiltering']()).toBe(true);
   });

@@ -43,11 +43,23 @@ export const FolderTreeStore = signalStore(
     ),
   })),
 
-  withComputed(({ sessions, selectedFileId }) => ({
+  withComputed(({ sessions, layoutsById, selectedFileId }) => ({
     selectedFileAncestors: computed<string[]>(() => {
       const fileId = selectedFileId();
       if (!fileId) return [];
-      return collectAncestorIds(sessions(), fileId);
+
+      // First, try to find in sessions
+      const sessionPath = collectAncestorIds(sessions(), fileId);
+      if (sessionPath !== null) return sessionPath;
+
+      // Check if it's in Others
+      const layout = layoutsById()[fileId];
+      if (layout) {
+        const uname = layout.username || 'Unknown User';
+        return ['others-root', `others-${uname}`];
+      }
+
+      return [];
     }),
   })),
 

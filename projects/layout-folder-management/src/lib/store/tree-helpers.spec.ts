@@ -275,8 +275,8 @@ describe('collectAncestorIds', () => {
     expect(ancestors).toEqual([]);
   });
 
-  it('returns empty array for a missing id', () => {
+  it('returns null for a missing id', () => {
     const ancestors = collectAncestorIds(forest, 'missing');
-    expect(ancestors).toEqual([]);
+    expect(ancestors).toBeNull();
   });
 });

@@ -98,10 +98,10 @@ export function addFolder(
 export function collectAncestorIds(
   forest: SessionNode[],
   targetId: string,
-): string[] {
+): string[] | null {
   const path: string[] = [];
   const found = walkPath(forest, targetId, path);
-  return found ? path : [];
+  return found ? path : null;
 }
 
 function walkPath(

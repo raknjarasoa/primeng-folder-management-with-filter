@@ -83,8 +83,11 @@ export class FolderTreeComponent {
     computation: (source, previous) => {
       const expandedKeys = previous ? this.collectExpandedKeys(previous.value) : new Set<string>();
 
-      // Auto-expand to selected file on initial load
-      if (this.isInitialLoad && source.selectedId && source.nodes.length > 0) {
+      const selectionChanged = previous && previous.source.selectedId !== source.selectedId;
+      const shouldAutoExpand = selectionChanged || (this.isInitialLoad && source.nodes.length > 0);
+
+      // Auto-expand to selected file on initial load or when selection changes
+      if (shouldAutoExpand && source.selectedId && source.nodes.length > 0) {
         const ancestors = this.store.selectedFileAncestors();
         if (ancestors.length > 0 || source.nodes.some(n => n.key === source.selectedId)) {
           ancestors.forEach((k) => expandedKeys.add(k));
