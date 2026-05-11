@@ -1,10 +1,23 @@
-export type SessionNodeKind = 'folder' | 'file';
-
-export interface SessionNode {
+export interface FolderNode {
   id: string;
-  kind: SessionNodeKind;
-  name?: string;
-  children?: SessionNode[];
+  kind: 'folder';
+  name: string;
+  children: SessionNode[];
+}
+
+export interface FileNode {
+  id: string;
+  kind: 'file';
+}
+
+export type SessionNode = FolderNode | FileNode;
+
+export function isFolder(node: SessionNode): node is FolderNode {
+  return node.kind === 'folder';
+}
+
+export function isFile(node: SessionNode): node is FileNode {
+  return node.kind === 'file';
 }
 
 export interface Layout {
@@ -18,7 +31,7 @@ export interface Layout {
 
 export interface NodeData {
   id: string;
-  kind: SessionNodeKind;
+  kind: 'folder' | 'file';
   layout?: Layout;
   isOther?: boolean;
 }

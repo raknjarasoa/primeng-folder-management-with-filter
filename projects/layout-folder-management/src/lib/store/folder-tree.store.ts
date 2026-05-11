@@ -12,6 +12,8 @@ import {
   Layout,
   NodeData,
   SessionNode,
+  isFile,
+  isFolder,
 } from '../models/folder-tree.models';
 import {
   addFolder,
@@ -48,11 +50,9 @@ export const FolderTreeStore = signalStore(
       const fileId = selectedFileId();
       if (!fileId) return [];
 
-      // First, try to find in sessions
       const sessionPath = collectAncestorIds(sessions(), fileId);
       if (sessionPath !== null) return sessionPath;
 
-      // Check if it's in Others
       const layout = layoutsById()[fileId];
       if (layout) {
         const uname = layout.username || 'Unknown User';
@@ -65,43 +65,28 @@ export const FolderTreeStore = signalStore(
 
   withMethods((store) => ({
     initData(sessions: SessionNode[], layouts: Layout[]): void {
-      const layoutsById = Object.fromEntries(
-        layouts.map((l) => [l.id, l]),
-      );
-      patchState(store, { sessions, layoutsById });
+      patchState(store, {
+        sessions,
+        layoutsById: Object.fromEntries(layouts.map((l) => [l.id, l])),
+      });
     },
 
     selectFile(fileId: string | null): void {
       patchState(store, { selectedFileId: fileId });
     },
 
-    moveNode(
-      draggedId: string,
-      targetFolderId: string | null,
-      index?: number,
-    ): void {
+    moveNode(draggedId: string, targetFolderId: string | null, index?: number): void {
       const current = store.sessions();
-
-      if (
-        targetFolderId !== null &&
-        isAncestorOrSelf(current, draggedId, targetFolderId)
-      ) {
-        return;
-      }
-
+      if (targetFolderId !== null && isAncestorOrSelf(current, draggedId, targetFolderId)) return;
       const { forest: without, removed } = removeNode(current, draggedId);
       if (!removed) return;
-
-      const next = insertNode(without, removed, targetFolderId, index);
-      patchState(store, { sessions: next });
+      patchState(store, { sessions: insertNode(without, removed, targetFolderId, index) });
     },
 
     deleteNode(id: string): void {
       const { forest } = removeNode(store.sessions(), id);
       const currentLayouts = { ...store.layoutsById() };
-      if (currentLayouts[id]) {
-        delete currentLayouts[id];
-      }
+      delete currentLayouts[id];
       const patch: Partial<State> = { sessions: forest, layoutsById: currentLayouts };
       if (store.selectedFileId() === id) patch.selectedFileId = null;
       patchState(store, patch);
@@ -110,17 +95,11 @@ export const FolderTreeStore = signalStore(
     renameFolder(id: string, newName: string): void {
       const trimmed = newName.trim();
       if (!trimmed) return;
-      patchState(store, {
-        sessions: renameFolder(store.sessions(), id, trimmed),
-      });
+      patchState(store, { sessions: renameFolder(store.sessions(), id, trimmed) });
     },
 
     addFolder(parentFolderId: string | null, name: string): string {
-      const { forest, newId } = addFolder(
-        store.sessions(),
-        parentFolderId,
-        name,
-      );
+      const { forest, newId } = addFolder(store.sessions(), parentFolderId, name);
       patchState(store, { sessions: forest });
       return newId;
     },
@@ -138,53 +117,44 @@ function toTreeNodes(
   const sessionFileIds = new Set<string>();
   const walk = (list: SessionNode[]) => {
     for (const n of list) {
-      if (n.kind === 'file') sessionFileIds.add(n.id);
-      if (n.children) walk(n.children);
+      if (isFile(n)) sessionFileIds.add(n.id);
+      if (isFolder(n)) walk(n.children);
     }
   };
   walk(sessions);
 
   const othersByUsername: Record<string, Layout[]> = {};
-  let hasOthers = false;
-
   for (const layout of Object.values(layoutsById)) {
     if (!sessionFileIds.has(layout.id)) {
       const uname = layout.username || 'Unknown User';
-      if (!othersByUsername[uname]) {
-        othersByUsername[uname] = [];
-      }
-      othersByUsername[uname].push(layout);
-      hasOthers = true;
+      (othersByUsername[uname] ??= []).push(layout);
     }
   }
 
-  if (hasOthers) {
-    const userFolders: TreeNode<NodeData>[] = Object.keys(othersByUsername)
-      .sort()
-      .map((uname) => {
-        return {
-          key: `others-${uname}`,
-          label: uname,
-          icon: 'pi pi-folder',
-          droppable: false,
-          draggable: false,
-          children: othersByUsername[uname].map((layout) => ({
-            key: layout.id,
-            label: layout.name,
-            icon: 'pi pi-file',
-            droppable: false,
-            draggable: false,
-            leaf: true,
-            data: { id: layout.id, kind: 'file', layout, isOther: true },
-          })),
-          data: { id: `others-${uname}`, kind: 'folder', isOther: true },
-        };
-      });
+  const usernames = Object.keys(othersByUsername).sort();
+  if (usernames.length) {
+    const userFolders: TreeNode<NodeData>[] = usernames.map((uname) => ({
+      key: `others-${uname}`,
+      label: uname,
+      icon: 'fas fa-folder',
+      droppable: false,
+      draggable: false,
+      children: othersByUsername[uname].map((layout) => ({
+        key: layout.id,
+        label: layout.name,
+        icon: 'fas fa-file',
+        droppable: false,
+        draggable: false,
+        leaf: true,
+        data: { id: layout.id, kind: 'file', layout, isOther: true },
+      })),
+      data: { id: `others-${uname}`, kind: 'folder', isOther: true },
+    }));
 
     nodes.push({
       key: 'others-root',
       label: 'Others',
-      icon: 'pi pi-folder',
+      icon: 'fas fa-folder',
       droppable: false,
       draggable: false,
       children: userFolders,
@@ -199,14 +169,14 @@ function sessionToTreeNode(
   s: SessionNode,
   layoutsById: Record<string, Layout>,
 ): TreeNode<NodeData> {
-  if (s.kind === 'folder') {
+  if (isFolder(s)) {
     return {
       key: s.id,
-      label: s.name ?? '(untitled folder)',
-      icon: 'pi pi-folder',
+      label: s.name,
+      icon: 'fas fa-folder',
       droppable: true,
       draggable: true,
-      children: (s.children ?? []).map((c) => sessionToTreeNode(c, layoutsById)),
+      children: s.children.map((c) => sessionToTreeNode(c, layoutsById)),
       data: { id: s.id, kind: 'folder' },
     };
   }
@@ -214,7 +184,7 @@ function sessionToTreeNode(
   return {
     key: s.id,
     label: layout?.name ?? `(missing layout: ${s.id})`,
-    icon: 'pi pi-file',
+    icon: 'fas fa-file',
     droppable: false,
     draggable: true,
     leaf: true,

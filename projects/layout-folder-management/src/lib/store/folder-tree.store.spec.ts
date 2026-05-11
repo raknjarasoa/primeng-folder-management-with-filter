@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Component, inject } from '@angular/core';
 
 import { FolderTreeStore } from './folder-tree.store';
-import { SessionNode, Layout } from '../models/folder-tree.models';
+import { SessionNode, Layout, isFolder } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Shared test data
@@ -42,13 +42,8 @@ function makeLayouts(): Layout[] {
 // ---------------------------------------------------------------------------
 // Helper: create store instance via a host component
 // ---------------------------------------------------------------------------
-// signalStore is component-scoped, so we need a host component to instantiate it.
 
-@Component({
-  standalone: true,
-  template: '',
-  providers: [FolderTreeStore],
-})
+@Component({ standalone: true, template: '', providers: [FolderTreeStore] })
 class TestHost {
   store = inject(FolderTreeStore);
 }
@@ -58,8 +53,7 @@ describe('FolderTreeStore', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({ imports: [TestHost] });
-    const fixture = TestBed.createComponent(TestHost);
-    store = fixture.componentInstance.store;
+    store = TestBed.createComponent(TestHost).componentInstance.store;
   });
 
   // -----------------------------------------------------------------------
@@ -69,14 +63,13 @@ describe('FolderTreeStore', () => {
   describe('initData', () => {
     it('populates sessions and layoutsById', () => {
       store.initData(makeSessions(), makeLayouts());
-
       expect(store.sessions().length).toBe(2);
       expect(Object.keys(store.layoutsById()).length).toBe(3);
     });
   });
 
   // -----------------------------------------------------------------------
-  // treeNodes (computed projection)
+  // treeNodes
   // -----------------------------------------------------------------------
 
   describe('treeNodes', () => {
@@ -85,11 +78,9 @@ describe('FolderTreeStore', () => {
       const nodes = store.treeNodes();
 
       expect(nodes.length).toBe(2);
-      // First node is a folder
       expect(nodes[0].label).toBe('Trading');
       expect(nodes[0].data?.kind).toBe('folder');
       expect(nodes[0].children?.length).toBe(2);
-      // File node label comes from layout
       expect(nodes[0].children![0].label).toBe('EUR/USD');
       expect(nodes[0].children![0].data?.kind).toBe('file');
     });
@@ -97,27 +88,14 @@ describe('FolderTreeStore', () => {
     it('shows placeholder label when layout is missing', () => {
       const sessions: SessionNode[] = [{ id: 'orphan', kind: 'file' }];
       store.initData(sessions, []);
-      const nodes = store.treeNodes();
-
-      expect(nodes[0].label).toContain('missing layout');
-    });
-
-    it('shows "(untitled folder)" for folder without name', () => {
-      const sessions: SessionNode[] = [
-        { id: 'f1', kind: 'folder', children: [] },
-      ];
-      store.initData(sessions, []);
-      const nodes = store.treeNodes();
-
-      expect(nodes[0].label).toBe('(untitled folder)');
+      expect(store.treeNodes()[0].label).toContain('missing layout');
     });
 
     it('sets droppable=true for folders and droppable=false for files', () => {
       store.initData(makeSessions(), makeLayouts());
       const nodes = store.treeNodes();
-
-      expect(nodes[0].droppable).toBe(true); // folder
-      expect(nodes[1].droppable).toBe(false); // file
+      expect(nodes[0].droppable).toBe(true);
+      expect(nodes[1].droppable).toBe(false);
     });
   });
 
@@ -146,9 +124,7 @@ describe('FolderTreeStore', () => {
     it('returns ancestor folder ids for a selected file', () => {
       store.initData(makeSessions(), makeLayouts());
       store.selectFile('v-002');
-
-      const ancestors = store.selectedFileAncestors();
-      expect(ancestors).toEqual(['f-trading', 'f-equity']);
+      expect(store.selectedFileAncestors()).toEqual(['f-trading', 'f-equity']);
     });
 
     it('returns empty array when no file selected', () => {
@@ -171,25 +147,27 @@ describe('FolderTreeStore', () => {
     it('moves a file to root level', () => {
       store.initData(makeSessions(), makeLayouts());
       store.moveNode('v-001', null, 0);
-
-      const sessions = store.sessions();
-      expect(sessions[0].id).toBe('v-001');
+      expect(store.sessions()[0].id).toBe('v-001');
     });
 
     it('moves a file into a different folder', () => {
       store.initData(makeSessions(), makeLayouts());
       store.moveNode('v-003', 'f-equity');
-
-      const equity = store.sessions()[0].children!.find(c => c.id === 'f-equity')!;
-      expect(equity.children!.some(c => c.id === 'v-003')).toBe(true);
+      const trading = store.sessions()[0];
+      expect(isFolder(trading)).toBe(true);
+      if (isFolder(trading)) {
+        const equity = trading.children.find((c) => c.id === 'f-equity');
+        expect(equity).toBeDefined();
+        if (equity && isFolder(equity)) {
+          expect(equity.children.some((c) => c.id === 'v-003')).toBe(true);
+        }
+      }
     });
 
     it('prevents cycle (folder into itself)', () => {
       store.initData(makeSessions(), makeLayouts());
       const before = structuredClone(store.sessions());
       store.moveNode('f-trading', 'f-equity');
-
-      // Sessions should be unchanged
       expect(store.sessions()).toEqual(before);
     });
 
@@ -209,23 +187,21 @@ describe('FolderTreeStore', () => {
     it('deletes a node from the tree', () => {
       store.initData(makeSessions(), makeLayouts());
       store.deleteNode('v-003');
-
-      expect(store.sessions().length).toBe(1); // only f-trading remains at root
+      expect(store.sessions().length).toBe(1);
     });
 
     it('deletes a nested node', () => {
       store.initData(makeSessions(), makeLayouts());
       store.deleteNode('v-001');
-
       const trading = store.sessions()[0];
-      expect(trading.children!.length).toBe(1); // only f-equity
+      expect(isFolder(trading)).toBe(true);
+      if (isFolder(trading)) expect(trading.children.length).toBe(1);
     });
 
     it('clears selectedFileId when the selected node is deleted', () => {
       store.initData(makeSessions(), makeLayouts());
       store.selectFile('v-001');
       store.deleteNode('v-001');
-
       expect(store.selectedFileId()).toBeNull();
     });
 
@@ -233,7 +209,6 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.selectFile('v-001');
       store.deleteNode('v-003');
-
       expect(store.selectedFileId()).toBe('v-001');
     });
   });
@@ -246,22 +221,23 @@ describe('FolderTreeStore', () => {
     it('renames a folder', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', 'Renamed');
-
-      expect(store.sessions()[0].name).toBe('Renamed');
+      const node = store.sessions()[0];
+      expect(isFolder(node)).toBe(true);
+      if (isFolder(node)) expect(node.name).toBe('Renamed');
     });
 
     it('trims whitespace', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '  Trimmed  ');
-
-      expect(store.sessions()[0].name).toBe('Trimmed');
+      const node = store.sessions()[0];
+      if (isFolder(node)) expect(node.name).toBe('Trimmed');
     });
 
     it('ignores empty name', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '   ');
-
-      expect(store.sessions()[0].name).toBe('Trading');
+      const node = store.sessions()[0];
+      if (isFolder(node)) expect(node.name).toBe('Trading');
     });
   });
 
@@ -273,19 +249,23 @@ describe('FolderTreeStore', () => {
     it('adds a folder at root level', () => {
       store.initData(makeSessions(), makeLayouts());
       const newId = store.addFolder(null, 'New Folder');
-
+      const newNode = store.sessions()[0];
       expect(newId).toBeTruthy();
-      expect(store.sessions()[0].id).toBe(newId);
-      expect(store.sessions()[0].name).toBe('New Folder');
+      expect(newNode.id).toBe(newId);
+      expect(isFolder(newNode)).toBe(true);
+      if (isFolder(newNode)) expect(newNode.name).toBe('New Folder');
     });
 
     it('adds a subfolder inside an existing folder', () => {
       store.initData(makeSessions(), makeLayouts());
       const newId = store.addFolder('f-trading', 'Subfolder');
-
       const trading = store.sessions()[0];
-      expect(trading.children![0].id).toBe(newId);
-      expect(trading.children![0].name).toBe('Subfolder');
+      expect(isFolder(trading)).toBe(true);
+      if (isFolder(trading)) {
+        expect(trading.children[0].id).toBe(newId);
+        const sub = trading.children[0];
+        if (isFolder(sub)) expect(sub.name).toBe('Subfolder');
+      }
     });
   });
 });

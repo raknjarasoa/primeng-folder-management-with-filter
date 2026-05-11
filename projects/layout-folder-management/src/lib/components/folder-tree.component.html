@@ -1,36 +1,29 @@
-<div class="layout">
-  <header class="header">
-    <h1>Folder management</h1>
-    <p class="hint">
-      Drag to reorder · drop into folders · double-click a folder to rename ·
-      click a file to select it
-    </p>
-  </header>
+<div class="max-w-[720px] mx-auto p-6 font-sans">
 
-  <div class="toolbar">
-    <p-iconField iconPosition="left" class="search-wrapper">
-      <p-inputIcon styleClass="pi pi-search" />
+  <div class="flex items-center gap-3 mb-3">
+    <p-iconField iconPosition="left" class="flex-1">
+      <p-inputIcon styleClass="fas fa-search" />
       <input
         pInputText
-        class="search-input"
+        class="w-full text-[13px] h-[34px]"
         placeholder="Search folders and files…"
         [(ngModel)]="filterText"
       />
       @if (filterText()) {
         <button
           pButton
-          icon="pi pi-times"
+          icon="fas fa-times"
           text
           rounded
           size="small"
-          class="clear-btn"
+          class="absolute right-1"
           (click)="onFilterChange('')"
         ></button>
       }
     </p-iconField>
     <button
       pButton
-      icon="pi pi-folder-plus"
+      icon="fas fa-folder-plus"
       label="New folder"
       outlined
       size="small"
@@ -60,15 +53,20 @@
   </p-tree>
 
   @if (treeValue().length === 0 && isFiltering()) {
-    <div class="status">No results for "{{ filterText() }}"</div>
+    <div class="px-4 py-3 rounded bg-gray-100 text-sm">
+      No results for "{{ filterText() }}"
+    </div>
   }
 
   <ng-template #row let-node>
-    <div class="row" [class.selected-file]="node.data.kind === 'file' && store.selectedFileId() === node.data.id">
+    <div
+      class="row flex items-center gap-3 w-full px-1 py-0.5 rounded transition-colors"
+      [class.bg-blue-50]="node.data.kind === 'file' && store.selectedFileId() === node.data.id"
+    >
       @if (node.data.kind === 'folder' && editingId() === node.data.id) {
         <input
           pInputText
-          class="rename-input"
+          class="text-sm px-1.5 py-0.5 h-[26px]"
           [(ngModel)]="editingValue"
           (keydown.enter)="commitRename(node.data.id)"
           (keydown.escape)="cancelRename(node.data.id)"
@@ -76,17 +74,17 @@
         />
         <button
           pButton
-          icon="pi pi-check"
+          icon="fas fa-check"
           text
           rounded
           size="small"
           severity="success"
-          class="confirm-btn"
+          class="shrink-0"
           (click)="commitRename(node.data.id); $event.stopPropagation()"
         ></button>
       } @else {
         <span
-          class="label"
+          class="text-sm cursor-text select-none"
           (dblclick)="
             node.data.kind === 'folder' && !node.data.isOther &&
               startRename(node.data.id, node.label)
@@ -97,21 +95,20 @@
       }
 
       @if (node.data.kind === 'file' && node.data.layout) {
-        <span class="meta">
+        <span class="text-[11px] text-gray-400 ml-auto tabular-nums whitespace-nowrap">
           updated {{ node.data.layout.lastUpdated | date: 'MMM d, HH:mm' }}
-          · viewed
-          {{ node.data.layout.lastViewDate | date: 'MMM d, HH:mm' }}
+          · viewed {{ node.data.layout.lastViewDate | date: 'MMM d, HH:mm' }}
           @if (node.data.layout.description) {
             · {{ node.data.layout.description }}
           }
         </span>
       }
 
-      <span class="actions">
+      <span class="actions flex gap-0.5 opacity-0 transition-opacity">
         @if (node.data.kind === 'folder' && editingId() !== node.data.id && !node.data.isOther) {
           <button
             pButton
-            icon="pi pi-folder-plus"
+            icon="fas fa-folder-plus"
             text
             rounded
             size="small"
@@ -121,7 +118,7 @@
           ></button>
           <button
             pButton
-            icon="pi pi-pencil"
+            icon="fas fa-pencil"
             text
             rounded
             size="small"
@@ -132,7 +129,7 @@
         @if (!node.data.isOther || node.data.kind === 'file') {
           <button
             pButton
-            icon="pi pi-trash"
+            icon="fas fa-trash"
             text
             rounded
             size="small"

@@ -1,4 +1,4 @@
-import { SessionNode } from '../models/folder-tree.models';
+import { SessionNode, isFolder } from '../models/folder-tree.models';
 
 export interface NodeLocation {
   node: SessionNode;
@@ -19,7 +19,7 @@ export function findLocation(
     for (let i = 0; i < siblings.length; i++) {
       const node = siblings[i];
       if (node.id === id) return { node, parent, index: i, siblings };
-      if (node.children?.length) {
+      if (isFolder(node) && node.children.length) {
         stack.push({ siblings: node.children, parent: node });
       }
     }
@@ -34,7 +34,7 @@ export function isAncestorOrSelf(
 ): boolean {
   if (ancestorId === descendantId) return true;
   const loc = findLocation(forest, ancestorId);
-  if (!loc || !loc.node.children) return false;
+  if (!loc || !isFolder(loc.node)) return false;
   return findLocation(loc.node.children, descendantId) !== null;
 }
 
@@ -57,18 +57,15 @@ export function insertNode(
 ): SessionNode[] {
   const cloned = structuredClone(forest);
   if (targetFolderId === null) {
-    const at = index ?? cloned.length;
-    cloned.splice(at, 0, node);
+    cloned.splice(index ?? cloned.length, 0, node);
     return cloned;
   }
   const loc = findLocation(cloned, targetFolderId);
-  if (!loc || loc.node.kind !== 'folder') {
+  if (!loc || !isFolder(loc.node)) {
     cloned.push(node);
     return cloned;
   }
-  loc.node.children = loc.node.children ?? [];
-  const at = index ?? loc.node.children.length;
-  loc.node.children.splice(at, 0, node);
+  loc.node.children.splice(index ?? loc.node.children.length, 0, node);
   return cloned;
 }
 
@@ -79,7 +76,7 @@ export function renameFolder(
 ): SessionNode[] {
   const cloned = structuredClone(forest);
   const loc = findLocation(cloned, id);
-  if (!loc || loc.node.kind !== 'folder') return cloned;
+  if (!loc || !isFolder(loc.node)) return cloned;
   loc.node.name = newName;
   return cloned;
 }
@@ -91,8 +88,7 @@ export function addFolder(
 ): { forest: SessionNode[]; newId: string } {
   const newId = `f-${Date.now().toString(36)}`;
   const folder: SessionNode = { id: newId, kind: 'folder', name, children: [] };
-  const newForest = insertNode(forest, folder, parentFolderId, 0);
-  return { forest: newForest, newId };
+  return { forest: insertNode(forest, folder, parentFolderId, 0), newId };
 }
 
 export function collectAncestorIds(
@@ -100,18 +96,13 @@ export function collectAncestorIds(
   targetId: string,
 ): string[] | null {
   const path: string[] = [];
-  const found = walkPath(forest, targetId, path);
-  return found ? path : null;
+  return walkPath(forest, targetId, path) ? path : null;
 }
 
-function walkPath(
-  nodes: SessionNode[],
-  targetId: string,
-  path: string[],
-): boolean {
+function walkPath(nodes: SessionNode[], targetId: string, path: string[]): boolean {
   for (const node of nodes) {
     if (node.id === targetId) return true;
-    if (node.children?.length) {
+    if (isFolder(node) && node.children.length) {
       path.push(node.id);
       if (walkPath(node.children, targetId, path)) return true;
       path.pop();

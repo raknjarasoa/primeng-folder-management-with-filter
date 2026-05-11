@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { provideExperimentalZonelessChangeDetection } from '@angular/core';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import { SessionNode, Layout } from '../models/folder-tree.models';
+import { SessionNode, Layout, isFolder } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -73,8 +72,7 @@ describe('FolderTreeComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const treeNodes = component.treeValue();
-    expect(treeNodes.length).toBeGreaterThan(0);
+    expect(component.treeValue().length).toBeGreaterThan(0);
   });
 
   it('should project correct labels from layouts', async () => {
@@ -85,9 +83,7 @@ describe('FolderTreeComponent', () => {
     fixture.detectChanges();
 
     const nodes = component.treeValue();
-    // Root folder label comes from session name
     expect(nodes[0].label).toBe('Root Folder');
-    // Top level file label comes from layout name
     expect(nodes[1].label).toBe('Top Level File');
   });
 
@@ -103,9 +99,7 @@ describe('FolderTreeComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const selectedNode = component.selectedNode();
-    expect(selectedNode).not.toBeNull();
-    expect(selectedNode!.key).toBe('file-1');
+    expect(component.selectedNode()?.key).toBe('file-1');
   });
 
   it('should auto-expand ancestor folders for a selected file', async () => {
@@ -116,9 +110,7 @@ describe('FolderTreeComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const treeNodes = component.treeValue();
-    // Root folder should be expanded since file-2 is nested inside f-root > f-nested
-    expect(treeNodes[0].expanded).toBe(true);
+    expect(component.treeValue()[0].expanded).toBe(true);
   });
 
   it('should return null selectedNode when no file is selected', async () => {
@@ -144,11 +136,9 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('alpha');
     fixture.detectChanges();
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise((r) => setTimeout(r, 350));
 
-    const nodes = component.treeValue();
-    // Should show only matching nodes: Root Folder (ancestor) containing Alpha Report
-    const allLabels = flattenLabels(nodes);
+    const allLabels = flattenLabels(component.treeValue());
     expect(allLabels).toContain('Alpha Report');
     expect(allLabels).not.toContain('Top Level File');
   });
@@ -162,14 +152,10 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('beta');
     fixture.detectChanges();
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise((r) => setTimeout(r, 350));
 
-    const nodes = component.treeValue();
-    // All ancestor folders should be expanded during filter
-    for (const n of nodes) {
-      if (n.children?.length) {
-        expect(n.expanded).toBe(true);
-      }
+    for (const n of component.treeValue()) {
+      if (n.children?.length) expect(n.expanded).toBe(true);
     }
   });
 
@@ -182,7 +168,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('zzzzzzzzz');
     fixture.detectChanges();
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise((r) => setTimeout(r, 350));
 
     expect(component.treeValue().length).toBe(0);
     expect(component['isFiltering']()).toBe(true);
@@ -197,7 +183,7 @@ describe('FolderTreeComponent', () => {
 
     component['filterText'].set('alpha');
     fixture.detectChanges();
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise((r) => setTimeout(r, 350));
 
     expect(component['isFiltering']()).toBe(true);
   });
@@ -219,18 +205,6 @@ describe('FolderTreeComponent', () => {
     expect(component['editingValue']()).toBe('Root Folder');
   });
 
-  it('should clear "(untitled folder)" placeholder on startRename', async () => {
-    fixture.componentRef.setInput('sessions', makeSessions());
-    fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    component['startRename']('f-root', '(untitled folder)');
-
-    expect(component['editingValue']()).toBe('');
-  });
-
   it('should commit rename and update the store', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
@@ -243,7 +217,9 @@ describe('FolderTreeComponent', () => {
     component['commitRename']('f-root');
 
     expect(component['editingId']()).toBeNull();
-    expect(component.store.sessions()[0].name).toBe('New Name');
+    const session = component.store.sessions()[0];
+    expect(isFolder(session)).toBe(true);
+    if (isFolder(session)) expect(session.name).toBe('New Name');
   });
 
   it('should not commit rename with empty name', async () => {
@@ -257,10 +233,9 @@ describe('FolderTreeComponent', () => {
     component['editingValue'].set('   ');
     component['commitRename']('f-root');
 
-    // Still in editing mode
     expect(component['editingId']()).toBe('f-root');
-    // Store unchanged
-    expect(component.store.sessions()[0].name).toBe('Root Folder');
+    const session = component.store.sessions()[0];
+    if (isFolder(session)) expect(session.name).toBe('Root Folder');
   });
 
   // -----------------------------------------------------------------------
@@ -292,7 +267,6 @@ describe('FolderTreeComponent', () => {
     const sessionsBefore = component.store.sessions().length;
     component['onAddFolder']();
     const newId = component['creatingId']()!;
-
     component['cancelRename'](newId);
 
     expect(component.store.sessions().length).toBe(sessionsBefore);
@@ -307,10 +281,17 @@ describe('FolderTreeComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const childrenBefore = component.store.sessions()[0].children!.length;
+    const first = component.store.sessions()[0];
+    expect(isFolder(first)).toBe(true);
+    if (!isFolder(first)) return;
+
+    const childrenBefore = first.children.length;
     component['onAddFolder']('f-root');
 
-    expect(component.store.sessions()[0].children!.length).toBe(childrenBefore + 1);
+    const updated = component.store.sessions()[0];
+    if (isFolder(updated)) {
+      expect(updated.children.length).toBe(childrenBefore + 1);
+    }
     expect(component['editingId']()).not.toBeNull();
   });
 
@@ -338,10 +319,8 @@ describe('FolderTreeComponent', () => {
 // ---------------------------------------------------------------------------
 
 function flattenLabels(nodes: any[]): string[] {
-  const result: string[] = [];
-  for (const n of nodes) {
-    if (n.label) result.push(n.label);
-    if (n.children) result.push(...flattenLabels(n.children));
-  }
-  return result;
+  return nodes.flatMap((n) => [
+    ...(n.label ? [n.label] : []),
+    ...(n.children ? flattenLabels(n.children) : []),
+  ]);
 }

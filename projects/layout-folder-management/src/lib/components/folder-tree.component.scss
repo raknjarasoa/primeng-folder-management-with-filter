@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+// PrimeNG tree internal padding override
+.tree {
+  --p-tree-padding: 4px;
+}
+
+// Actions fade in on row hover (Tailwind group-hover only works for direct descendants)
+.row:hover .actions {
+  opacity: 1;
+}
