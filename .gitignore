@@ -2,3 +2,5 @@ node_modules
 .angular
 dist
 .claude/settings.local.json
+__screenshots__/
+.vitest-attachments/
