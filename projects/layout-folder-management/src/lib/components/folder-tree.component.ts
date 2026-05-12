@@ -239,7 +239,16 @@ export class FolderTreeComponent {
       icon: 'fas fa-circle-info',
       acceptButtonStyleClass: 'p-button-danger p-button-text',
       rejectButtonStyleClass: 'p-button-text',
-      accept: () => this.store.deleteNode(data.id),
+      accept: () => {
+        // If this node was being renamed (e.g. a brand-new folder deleted before
+        // the name was committed), clear the editing state so that the
+        // "New folder" / "Add subfolder" buttons are no longer disabled.
+        if (this.editingId() === data.id) {
+          this.editingId.set(null);
+          this.creatingId.set(null);
+        }
+        this.store.deleteNode(data.id);
+      },
     });
   }
 

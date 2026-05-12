@@ -126,7 +126,10 @@
             (click)="startRename(node.data.id, node.label); $event.stopPropagation()"
           ></button>
         }
-        @if (!node.data.isOther || node.data.kind === 'file') {
+        @if (
+          (node.data.kind === 'file' && !node.data.isOther) ||
+          (node.data.kind === 'folder' && !node.data.isOther && (!node.children || node.children.length === 0))
+        ) {
           <button
             pButton
             icon="fas fa-trash"
