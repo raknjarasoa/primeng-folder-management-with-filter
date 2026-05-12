@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, delay } from 'rxjs';
-import { SessionNode, Layout } from 'layout-folder-management';
+import { Layout, SessionNode } from 'layout-folder-management';
+import { delay, Observable, of } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class FolderApiService {
@@ -41,7 +41,7 @@ export class FolderApiService {
 
   fetchLayouts1(): Observable<Layout[]> {
     const layouts: Layout[] = [
-      { id: 'v-001', name: 'EUR/USD intraday', lastUpdated: '2026-04-29T08:12:00Z', lastViewDate: '2026-05-03T14:01:00Z' },
+      { id: 'v-001DDD', name: 'EUR/USD intraday', lastUpdated: '2026-04-29T08:12:00Z', lastViewDate: '2026-05-03T14:01:00Z' },
       { id: 'v-002', name: 'FX volatility surface', lastUpdated: '2026-04-22T10:30:00Z', lastViewDate: '2026-05-01T09:45:00Z' },
       { id: 'v-003', name: 'CAC 40 momentum', lastUpdated: '2026-05-02T16:00:00Z', lastViewDate: '2026-05-04T07:30:00Z' },
       { id: 'v-004', name: 'S&P sector heatmap', lastUpdated: '2026-04-15T12:00:00Z', lastViewDate: '2026-04-28T11:20:00Z' },

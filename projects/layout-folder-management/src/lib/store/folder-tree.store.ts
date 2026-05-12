@@ -112,12 +112,14 @@ function toTreeNodes(
   sessions: SessionNode[],
   layoutsById: Record<string, Layout>,
 ): TreeNode<NodeData>[] {
-  const nodes = sessions.map((s) => sessionToTreeNode(s, layoutsById));
+  const nodes = sessions
+    .map((s) => sessionToTreeNode(s, layoutsById))
+    .filter((n): n is TreeNode<NodeData> => n !== null);
 
   const sessionFileIds = new Set<string>();
   const walk = (list: SessionNode[]) => {
     for (const n of list) {
-      if (isFile(n)) sessionFileIds.add(n.id);
+      if (isFile(n) && layoutsById[n.id]) sessionFileIds.add(n.id);
       if (isFolder(n)) walk(n.children);
     }
   };
@@ -168,7 +170,7 @@ function toTreeNodes(
 function sessionToTreeNode(
   s: SessionNode,
   layoutsById: Record<string, Layout>,
-): TreeNode<NodeData> {
+): TreeNode<NodeData> | null {
   if (isFolder(s)) {
     return {
       key: s.id,
@@ -176,14 +178,17 @@ function sessionToTreeNode(
       icon: 'fas fa-folder',
       droppable: true,
       draggable: true,
-      children: s.children.map((c) => sessionToTreeNode(c, layoutsById)),
+      children: s.children
+        .map((c) => sessionToTreeNode(c, layoutsById))
+        .filter((n): n is TreeNode<NodeData> => n !== null),
       data: { id: s.id, kind: 'folder' },
     };
   }
   const layout = layoutsById[s.id];
+  if (!layout) return null;
   return {
     key: s.id,
-    label: layout?.name ?? `(missing layout: ${s.id})`,
+    label: layout.name,
     icon: 'fas fa-file',
     droppable: false,
     draggable: true,
