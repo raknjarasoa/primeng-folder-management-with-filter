@@ -2,8 +2,12 @@
   display: block;
 }
 
-// PrimeNG tree internal padding override
-.tree {
+// Scroll viewport — our own wrapper, no encapsulation issues
+.tree-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  // CSS custom property cascades to descendant <p-tree> regardless of
+  // view encapsulation, so the PrimeNG padding override works from here.
   --p-tree-padding: 4px;
 }
 
