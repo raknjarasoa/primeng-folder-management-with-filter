@@ -196,6 +196,32 @@ function collectAllIds(nodes: TreeItem[], out: Set<string>): void {
   }
 }
 
+export interface FolderOption {
+  id: string;
+  label: string;
+  depth: number;
+}
+
+// Walks the session forest and returns every folder as a flat list (id +
+// label + depth), skipping anything whose id is in `excludeIds`. Used by the
+// "Move to…" picker to present valid move targets; the source row's own
+// subtree is excluded to prevent cycles.
+export function flattenFolders(
+  forest: TreeItem[],
+  excludeIds: ReadonlySet<string>,
+): FolderOption[] {
+  const result: FolderOption[] = [];
+  const walk = (nodes: TreeItem[], depth: number): void => {
+    for (const node of nodes) {
+      if (!isFolderNode(node) || excludeIds.has(node.id)) continue;
+      result.push({ id: node.id, label: node.name, depth });
+      walk(node.children, depth + 1);
+    }
+  };
+  walk(forest, 0);
+  return result;
+}
+
 // Flattens the session tree (+ orphan-layouts "Others" subtree) into the
 // single list cdk-virtual-scroll consumes. When `filter` is non-empty, only
 // nodes whose label/metadata match, plus their ancestors, are emitted, and

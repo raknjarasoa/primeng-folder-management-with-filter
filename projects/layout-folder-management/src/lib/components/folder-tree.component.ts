@@ -26,6 +26,7 @@ import { ButtonModule } from 'primeng/button';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { Popover } from 'primeng/popover';
 import { TooltipModule } from 'primeng/tooltip';
 import { debounceTime } from 'rxjs/operators';
 
@@ -35,10 +36,12 @@ import {
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
 import {
+  FolderOption,
   OTHERS_ROOT_ID,
   addFolder,
   collectAncestorIds,
   collectSubtreeIds,
+  flattenFolders,
   flattenSessions,
   insertNode,
   isAncestorOrSelf,
@@ -66,6 +69,7 @@ interface DropTarget {
     InputTextModule,
     IconFieldModule,
     InputIconModule,
+    Popover,
     TooltipModule,
   ],
   templateUrl: './folder-tree.component.html',
@@ -111,6 +115,10 @@ export class FolderTreeComponent {
 
   // Active drag-drop target indicator (rendered as a blue line / highlight).
   protected readonly dropTarget = signal<DropTarget | null>(null);
+
+  // Source row id while the "Move to…" picker is open. Drives the candidate
+  // list and is consumed on selection.
+  protected readonly movingRowId = signal<string | null>(null);
 
   // Tracks layout ids we've deleted locally so they don't reappear under
   // "Others" while the parent's `layouts` input still contains them. Resets
@@ -162,7 +170,18 @@ export class FolderTreeComponent {
     ),
   );
 
+  // Folders that are valid "Move to…" targets given the current movingRowId
+  // (the source's own subtree is excluded to prevent cycles). Empty when the
+  // picker is closed.
+  protected readonly moveCandidates = computed<FolderOption[]>(() => {
+    const sourceId = this.movingRowId();
+    if (!sourceId) return [];
+    const exclude = collectSubtreeIds(this.sessions(), sourceId);
+    return flattenFolders(this.sessions(), exclude);
+  });
+
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
+  private readonly movePicker = viewChild<Popover>('movePicker');
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
@@ -412,6 +431,35 @@ export class FolderTreeComponent {
       this.creatingId.set(null);
     }
     this.deleteNode(row.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Move-to picker
+  // ---------------------------------------------------------------------------
+
+  protected openMovePicker(row: FlatRowData, event: Event): void {
+    this.movingRowId.set(row.id);
+    this.movePicker()?.toggle(event);
+  }
+
+  protected confirmMove(targetFolderId: string | null): void {
+    const sourceId = this.movingRowId();
+    this.movingRowId.set(null);
+    this.movePicker()?.hide();
+    if (!sourceId) return;
+    this.moveNode(sourceId, targetFolderId, 0);
+    if (targetFolderId) {
+      this.expandedIds.update((set) => {
+        if (set.has(targetFolderId)) return set;
+        const next = new Set(set);
+        next.add(targetFolderId);
+        return next;
+      });
+    }
+  }
+
+  protected onMovePickerHide(): void {
+    this.movingRowId.set(null);
   }
 
   // ---------------------------------------------------------------------------

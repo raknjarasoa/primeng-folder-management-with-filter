@@ -118,6 +118,18 @@
       }
 
       <span class="actions">
+        @if (!row.isOther && editingId() !== row.id) {
+          <button
+            pButton
+            icon="fas fa-arrow-right-from-bracket"
+            text
+            rounded
+            size="small"
+            pTooltip="Move to…"
+            [disabled]="editingId() !== null"
+            (click)="openMovePicker(row, $event); $event.stopPropagation()"
+          ></button>
+        }
         @if (row.kind === 'folder' && editingId() !== row.id && !row.isOther) {
           <button
             pButton
@@ -148,7 +160,7 @@
             rounded
             size="small"
             severity="danger"
-            pTooltip="Delete"
+            [pTooltip]="row.hasChildren ? 'Folder is not empty' : 'Delete'"
             [disabled]="row.hasChildren"
             (click)="onDelete(row); $event.stopPropagation()"
           ></button>
@@ -162,4 +174,31 @@
       No results for "{{ filterText() }}"
     </div>
   }
+
+  <p-popover #movePicker (onHide)="onMovePickerHide()">
+    <div class="move-picker">
+      <button
+        type="button"
+        class="move-picker__option move-picker__option--root"
+        (click)="confirmMove(null)"
+      >
+        <i class="fas fa-house"></i>
+        Root
+      </button>
+      @if (moveCandidates().length > 0) {
+        <div class="move-picker__divider"></div>
+      }
+      @for (folder of moveCandidates(); track folder.id) {
+        <button
+          type="button"
+          class="move-picker__option"
+          [style.padding-left.px]="folder.depth * 12 + 10"
+          (click)="confirmMove(folder.id)"
+        >
+          <i class="fas fa-folder"></i>
+          {{ folder.label }}
+        </button>
+      }
+    </div>
+  </p-popover>
 </div>
