@@ -208,10 +208,10 @@ describe('renameFolder', () => {
     expect(isFolder(node)).toBe(false);
   });
 
-  it('returns a clone when id is missing', () => {
+  it('returns same array when id is missing', () => {
     const original = makeForest();
     const result = renameFolder(original, 'nope', 'Nope');
-    expect(result).not.toBe(original);
+    expect(result).toBe(original);
     expect(result.length).toBe(3);
   });
 

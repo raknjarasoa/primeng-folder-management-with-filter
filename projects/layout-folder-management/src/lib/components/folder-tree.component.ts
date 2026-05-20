@@ -91,13 +91,15 @@ export class FolderTreeComponent {
         }
       }
 
-      const filtered = source.filter
-        ? this.filterTree(source.nodes, source.filter)
-        : source.nodes;
+      let filtered = source.nodes;
+      if (source.filter) {
+        filtered = this.filterTree(source.nodes, source.filter);
+        const filteredKeys = this.collectKeys(filtered);
+        filteredKeys.forEach(k => expandedKeys.add(k));
+      }
 
-      const keysToExpand = source.filter ? this.collectKeys(filtered) : expandedKeys;
-
-      return filtered.map((n) => this.copyNode(n, keysToExpand));
+      this.applyExpanded(filtered, expandedKeys);
+      return filtered;
     },
   });
 
@@ -273,7 +275,6 @@ export class FolderTreeComponent {
           result.push({
             ...node,
             children: filteredChildren.length > 0 ? filteredChildren : node.children,
-            expanded: true,
           });
         }
       } else if (labelMatch) {
@@ -312,16 +313,17 @@ export class FolderTreeComponent {
     return undefined;
   }
 
-  private copyNode(
-    node: TreeNode<NodeData>,
-    expandedKeys: Set<string>,
-    parent?: TreeNode<NodeData>,
-  ): TreeNode<NodeData> {
-    const copy: TreeNode<NodeData> = { ...node, parent };
-    if (node.key && expandedKeys.has(node.key)) copy.expanded = true;
-    if (node.children) {
-      copy.children = node.children.map((c) => this.copyNode(c, expandedKeys, copy));
-    }
-    return copy;
+  private applyExpanded(nodes: TreeNode<NodeData>[], expandedKeys: Set<string>): void {
+    const walk = (list: TreeNode<NodeData>[]) => {
+      for (const n of list) {
+        if (n.key && expandedKeys.has(n.key)) {
+          n.expanded = true;
+        } else {
+          n.expanded = false;
+        }
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(nodes);
   }
 }
