@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SessionNode, isFolderNode } from '../models/folder-tree.models';
+import { TreeItem, isFolderNode } from '../models/folder-tree.models';
 import {
   findLocation,
   isAncestorOrSelf,
@@ -14,7 +14,7 @@ import {
 // Shared test fixture
 // ---------------------------------------------------------------------------
 
-function makeForest(): SessionNode[] {
+function makeForest(): TreeItem[] {
   return [
     {
       id: 'f-root',
@@ -136,7 +136,7 @@ describe('removeNode', () => {
 // ---------------------------------------------------------------------------
 
 describe('insertNode', () => {
-  const newNode: SessionNode = { id: 'new-file', kind: 'file' };
+  const newNode: TreeItem = { id: 'new-file', kind: 'file' };
 
   it('inserts at root level (end) when targetFolderId is null', () => {
     const result = insertNode(makeForest(), newNode, null);

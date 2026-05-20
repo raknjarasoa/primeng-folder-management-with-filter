@@ -4,13 +4,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import type { SessionNode, LayoutInstance } from '../models/folder-tree.models';
+import type { TreeItem } from '../models/folder-tree.models';
+import type { LayoutInstance } from '../models/layout-instance.model';
 
 // ---------------------------------------------------------------------------
 // Static test data
 // ---------------------------------------------------------------------------
 
-const SESSIONS: SessionNode[] = [
+const SESSIONS: TreeItem[] = [
   {
     id: 'f-root',
     kind: 'folder',
@@ -29,9 +30,9 @@ const SESSIONS: SessionNode[] = [
 ];
 
 const LAYOUTS: LayoutInstance[] = [
-  { id: 'file-1', name: 'Alpha Report', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
-  { id: 'file-2', name: 'Beta Dashboard', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
-  { id: 'file-top', name: 'Top Level File', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
+  { id: 'file-1', name: 'Alpha Report', editable: true, username: '', description: '', tooltip: '' },
+  { id: 'file-2', name: 'Beta Dashboard', editable: true, username: '', description: '', tooltip: '' },
+  { id: 'file-top', name: 'Top Level File', editable: true, username: '', description: '', tooltip: '' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -53,11 +54,11 @@ async function mountComponent(): Promise<ComponentFixture<FolderTreeComponent>> 
   return fixture;
 }
 
-// Apply a filter via the signal and wait for Zone.js to process the 300 ms debounce.
+// Apply a filter via the internal signal and wait for the 300 ms debounce.
 async function applyFilter(fixture: ComponentFixture<FolderTreeComponent>, text: string) {
   fixture.componentInstance['filterText'].set(text);
   fixture.detectChanges();
-  await fixture.whenStable(); // waits for RxJS debounceTime(300) timer
+  await fixture.whenStable();
   fixture.detectChanges();
 }
 
@@ -78,10 +79,10 @@ describe('FolderTreeComponent — browser mode', () => {
   });
 
   // -------------------------------------------------------------------------
-  // DOM structure — tests that PrimeNG renders the expected elements for real
+  // DOM structure
   // -------------------------------------------------------------------------
 
-  it('renders the search input in the real DOM', async () => {
+  it('renders the search input', async () => {
     await expect
       .element(page.getByPlaceholder('Search folders and files…'))
       .toBeInTheDocument();
@@ -93,13 +94,13 @@ describe('FolderTreeComponent — browser mode', () => {
       .toBeInTheDocument();
   });
 
-  it('renders root-level tree node labels via PrimeNG tree', async () => {
+  it('renders root-level rows by label', async () => {
     await expect.element(page.getByText('Root Folder')).toBeInTheDocument();
     await expect.element(page.getByText('Top Level File')).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
-  // Real user-input interaction via userEvent
+  // Real user-input interaction
   // -------------------------------------------------------------------------
 
   it('reflects typed text in the search input', async () => {
@@ -110,25 +111,23 @@ describe('FolderTreeComponent — browser mode', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Filter / search — assert real DOM changes after debounce
+  // Filter / search
   // -------------------------------------------------------------------------
 
   it('shows no-results message when the filter matches nothing', async () => {
     await applyFilter(fixture, 'zzzzzzzzz');
 
-    await expect
-      .element(page.getByText(/No results for/))
-      .toBeInTheDocument();
+    await expect.element(page.getByText(/No results for/)).toBeInTheDocument();
   });
 
-  it('hides non-matching nodes after a search', async () => {
+  it('hides non-matching rows after a search', async () => {
     await applyFilter(fixture, 'alpha');
 
     await expect.element(page.getByText('Alpha Report')).toBeInTheDocument();
     await expect.element(page.getByText('Top Level File')).not.toBeInTheDocument();
   });
 
-  it('restores all nodes after clearing the search', async () => {
+  it('restores all rows after clearing the search', async () => {
     await applyFilter(fixture, 'alpha');
     await applyFilter(fixture, '');
 
