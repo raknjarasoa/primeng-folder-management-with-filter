@@ -1,4 +1,9 @@
-import { SessionNode, isFolderNode } from '../models/folder-tree.models';
+import {
+  FlatRow,
+  LayoutInstance,
+  SessionNode,
+  isFolderNode,
+} from '../models/folder-tree.models';
 
 export interface NodeLocation {
   node: SessionNode;
@@ -166,5 +171,220 @@ function walkPath(nodes: SessionNode[], targetId: string, path: string[]): boole
       path.pop();
     }
   }
+  return false;
+}
+
+// Collects the IDs of all nodes inside `rootId`'s subtree (including rootId
+// itself). Used during drag to disallow dropping a folder into its own
+// descendants in O(1) lookups rather than an O(N) tree walk per move event.
+export function collectSubtreeIds(
+  forest: SessionNode[],
+  rootId: string,
+): Set<string> {
+  const out = new Set<string>();
+  const loc = findLocation(forest, rootId);
+  if (!loc) return out;
+  out.add(rootId);
+  if (isFolderNode(loc.node)) collectAllIds(loc.node.children, out);
+  return out;
+}
+
+function collectAllIds(nodes: SessionNode[], out: Set<string>): void {
+  for (const n of nodes) {
+    out.add(n.id);
+    if (isFolderNode(n)) collectAllIds(n.children, out);
+  }
+}
+
+// Flattens the session tree (+ orphan-layouts "Others" subtree) into the
+// single list cdk-virtual-scroll consumes. When `filter` is non-empty, only
+// nodes whose label/metadata match, plus their ancestors, are emitted, and
+// matching subtrees are force-expanded so matches are visible.
+export const OTHERS_ROOT_ID = 'others-root';
+const OTHERS_USER_PREFIX = 'others-';
+
+export function flattenSessions(
+  sessions: SessionNode[],
+  layoutsById: Record<string, LayoutInstance>,
+  expandedIds: ReadonlySet<string>,
+  filter = '',
+): FlatRow[] {
+  const query = filter.trim().toLowerCase();
+  const result: FlatRow[] = [];
+
+  // Group orphan layouts by username for the "Others" subtree.
+  const sessionFileIds = collectSessionFileIds(sessions);
+  const othersByUsername: Record<string, LayoutInstance[]> = {};
+  for (const layout of Object.values(layoutsById)) {
+    if (!sessionFileIds.has(layout.id)) {
+      const uname = layout.username || 'Unknown User';
+      (othersByUsername[uname] ??= []).push(layout);
+    }
+  }
+  const othersUsernames = Object.keys(othersByUsername).sort();
+
+  // Build the include set when filtering. A node is included if it (or any
+  // descendant) matches the query.
+  let includeSet: Set<string> | null = null;
+  if (query) {
+    includeSet = new Set<string>();
+    buildIncludeSet(sessions, layoutsById, query, includeSet);
+    buildOthersIncludeSet(othersByUsername, query, includeSet);
+  }
+
+  const isExpanded = (id: string): boolean =>
+    includeSet !== null ? includeSet.has(id) : expandedIds.has(id);
+
+  // Walk the real sessions.
+  const walk = (nodes: SessionNode[], depth: number): void => {
+    for (const node of nodes) {
+      if (includeSet && !includeSet.has(node.id)) continue;
+      if (isFolderNode(node)) {
+        const expanded = isExpanded(node.id);
+        result.push({
+          id: node.id,
+          kind: 'folder',
+          label: node.name,
+          depth,
+          expanded,
+          hasChildren: node.children.length > 0,
+        });
+        if (expanded) walk(node.children, depth + 1);
+      } else {
+        // File node with no matching layout: skip it entirely rather than
+        // render a placeholder row.
+        const layout = layoutsById[node.id];
+        if (!layout) continue;
+        result.push({
+          id: node.id,
+          kind: 'file',
+          label: layout.name,
+          depth,
+          expanded: false,
+          hasChildren: false,
+          layout,
+        });
+      }
+    }
+  };
+  walk(sessions, 0);
+
+  // Append "Others" virtual subtree, if any orphans exist and (when filtering)
+  // anything inside matches.
+  const othersIncluded =
+    othersUsernames.length > 0 &&
+    (!includeSet || includeSet.has(OTHERS_ROOT_ID));
+  if (othersIncluded) {
+    const rootExpanded = isExpanded(OTHERS_ROOT_ID);
+    result.push({
+      id: OTHERS_ROOT_ID,
+      kind: 'folder',
+      label: 'Others',
+      depth: 0,
+      expanded: rootExpanded,
+      hasChildren: true,
+      isOther: true,
+    });
+    if (rootExpanded) {
+      for (const uname of othersUsernames) {
+        const userId = OTHERS_USER_PREFIX + uname;
+        if (includeSet && !includeSet.has(userId)) continue;
+        const userExpanded = isExpanded(userId);
+        result.push({
+          id: userId,
+          kind: 'folder',
+          label: uname,
+          depth: 1,
+          expanded: userExpanded,
+          hasChildren: true,
+          isOther: true,
+        });
+        if (userExpanded) {
+          for (const layout of othersByUsername[uname]) {
+            if (includeSet && !includeSet.has(layout.id)) continue;
+            result.push({
+              id: layout.id,
+              kind: 'file',
+              label: layout.name,
+              depth: 2,
+              expanded: false,
+              hasChildren: false,
+              layout,
+              isOther: true,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+function collectSessionFileIds(sessions: SessionNode[]): Set<string> {
+  const ids = new Set<string>();
+  const walk = (nodes: SessionNode[]): void => {
+    for (const n of nodes) {
+      if (isFolderNode(n)) walk(n.children);
+      else ids.add(n.id);
+    }
+  };
+  walk(sessions);
+  return ids;
+}
+
+function buildIncludeSet(
+  nodes: SessionNode[],
+  layoutsById: Record<string, LayoutInstance>,
+  query: string,
+  out: Set<string>,
+): boolean {
+  let anyMatched = false;
+  for (const node of nodes) {
+    let matched = false;
+    if (isFolderNode(node)) {
+      const labelMatch = node.name.toLowerCase().includes(query);
+      const childMatch = buildIncludeSet(node.children, layoutsById, query, out);
+      matched = labelMatch || childMatch;
+    } else {
+      const layout = layoutsById[node.id];
+      matched = matchesLayout(layout, query);
+    }
+    if (matched) {
+      out.add(node.id);
+      anyMatched = true;
+    }
+  }
+  return anyMatched;
+}
+
+function buildOthersIncludeSet(
+  othersByUsername: Record<string, LayoutInstance[]>,
+  query: string,
+  out: Set<string>,
+): void {
+  let anyMatched = false;
+  for (const uname of Object.keys(othersByUsername)) {
+    const userId = OTHERS_USER_PREFIX + uname;
+    let userHas = uname.toLowerCase().includes(query);
+    for (const layout of othersByUsername[uname]) {
+      if (matchesLayout(layout, query)) {
+        out.add(layout.id);
+        userHas = true;
+      }
+    }
+    if (userHas) {
+      out.add(userId);
+      anyMatched = true;
+    }
+  }
+  if (anyMatched) out.add(OTHERS_ROOT_ID);
+}
+
+function matchesLayout(layout: LayoutInstance | undefined, query: string): boolean {
+  if (!layout) return false;
+  if (layout.name.toLowerCase().includes(query)) return true;
+  if (layout.username?.toLowerCase().includes(query)) return true;
+  if (layout.description?.toLowerCase().includes(query)) return true;
   return false;
 }

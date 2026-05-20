@@ -2,16 +2,136 @@
   display: block;
 }
 
-// Scroll viewport — our own wrapper, no encapsulation issues
-.tree-scroll {
-  max-height: 300px;
-  overflow-y: auto;
-  // CSS custom property cascades to descendant <p-tree> regardless of
-  // view encapsulation, so the PrimeNG padding override works from here.
-  --p-tree-padding: 4px;
+.tree-viewport {
+  height: 320px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  contain: strict;
 }
 
-// Actions fade in on row hover (Tailwind group-hover only works for direct descendants)
-.row:hover .actions {
-  opacity: 1;
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-right: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+  border-radius: 3px;
+  transition: background-color 80ms;
+  overflow: hidden;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+
+  &.tree-row--selected {
+    background: #dbeafe;
+  }
+
+  &.tree-row--target-into {
+    background: rgba(59, 130, 246, 0.15);
+    outline: 1px solid #3b82f6;
+    outline-offset: -2px;
+  }
+
+  &.tree-row--other {
+    cursor: default;
+  }
+}
+
+.chevron,
+.chevron-spacer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.chevron {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #6b7280;
+
+  &:hover {
+    color: #111827;
+  }
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  font-size: 11px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 80ms;
+
+  .tree-row:hover & {
+    opacity: 1;
+  }
+}
+
+.drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #3b82f6;
+  pointer-events: none;
+  z-index: 1;
+
+  &--before {
+    top: 0;
+  }
+
+  &--after {
+    bottom: 0;
+  }
+}
+
+// CDK drag preview (the floating clone that follows the cursor)
+::ng-deep .cdk-drag-preview {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  box-shadow: 0 6px 12px -3px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  // Hide the original row's hover-fade actions inside the preview
+  .actions,
+  .drop-line {
+    display: none;
+  }
+}
+
+// The source row stays in place during drag; CDK clones it into a preview.
+.cdk-drag-placeholder {
+  opacity: 0.4;
 }

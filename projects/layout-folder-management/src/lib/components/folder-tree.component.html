@@ -32,46 +32,65 @@
     ></button>
   </div>
 
-  <div class="tree-scroll">
-    <p-tree
-    [value]="treeValue()"
-    [draggableNodes]="!isFiltering()"
-    [droppableNodes]="!isFiltering()"
-    draggableScope="folder-tree"
-    droppableScope="folder-tree"
-    selectionMode="single"
-    [selection]="selectedNode()"
-    (selectionChange)="onSelectionChange($event)"
-    (onNodeDrop)="onNodeDrop($event)"
-    styleClass="tree"
+  <cdk-virtual-scroll-viewport
+    cdkDropList
+    [cdkDropListSortingDisabled]="true"
+    class="tree-viewport"
+    [itemSize]="ROW_HEIGHT"
   >
-    <ng-template let-node pTemplate="default">
-      <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
-    </ng-template>
-    <ng-template let-node pTemplate="file">
-      <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
-    </ng-template>
-    </p-tree>
-  </div>
-
-  @if (treeValue().length === 0 && isFiltering()) {
-    <div class="px-4 py-3 rounded bg-gray-100 text-sm">
-      No results for "{{ filterText() }}"
-    </div>
-  }
-
-  <ng-template #row let-node>
     <div
-      class="row flex items-center gap-3 w-full px-1 py-0.5 rounded transition-colors"
-      [class.bg-blue-50]="node.data.kind === 'file' && store.selectedFileId() === node.data.id"
+      *cdkVirtualFor="let row of flatRows(); trackBy: trackRowId; let i = index"
+      class="tree-row"
+      [class.tree-row--selected]="row.kind === 'file' && store.selectedFileId() === row.id"
+      [class.tree-row--other]="row.isOther"
+      [class.tree-row--target-into]="dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'"
+      [style.padding-left.px]="row.depth * INDENT_PX + 4"
+      cdkDrag
+      [cdkDragDisabled]="!canDrag(row)"
+      [cdkDragData]="row"
+      (cdkDragStarted)="onDragStarted($event, row)"
+      (cdkDragMoved)="onDragMoved($event, row)"
+      (cdkDragReleased)="onDragReleased($event, row)"
+      (click)="onRowClick(row)"
     >
-      @if (node.data.kind === 'folder' && editingId() === node.data.id) {
+      @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
+        <div class="drop-line drop-line--before"></div>
+      }
+      @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'after') {
+        <div class="drop-line drop-line--after"></div>
+      }
+
+      @if (row.hasChildren) {
+        <button
+          type="button"
+          class="chevron"
+          (click)="toggleExpand(row.id, $event)"
+          [attr.aria-label]="row.expanded ? 'Collapse' : 'Expand'"
+        >
+          <i
+            class="fas text-[10px]"
+            [class.fa-chevron-down]="row.expanded"
+            [class.fa-chevron-right]="!row.expanded"
+          ></i>
+        </button>
+      } @else {
+        <span class="chevron-spacer"></span>
+      }
+
+      <i
+        class="fas shrink-0 text-gray-500"
+        [class.fa-folder]="row.kind === 'folder'"
+        [class.fa-file]="row.kind === 'file'"
+      ></i>
+
+      @if (row.kind === 'folder' && editingId() === row.id) {
         <input
           pInputText
-          class="text-sm px-1.5 py-0.5 h-[26px]"
+          class="text-sm px-1.5 py-0 h-[22px] min-w-0 flex-1"
           [(ngModel)]="editingValue"
-          (keydown.enter)="commitRename(node.data.id)"
-          (keydown.escape)="cancelRename(node.data.id)"
+          (keydown.enter)="commitRename(row.id)"
+          (keydown.escape)="cancelRename(row.id)"
+          (click)="$event.stopPropagation()"
           autofocus
         />
         <button
@@ -82,32 +101,28 @@
           size="small"
           severity="success"
           class="shrink-0"
-          (click)="commitRename(node.data.id); $event.stopPropagation()"
+          (click)="commitRename(row.id); $event.stopPropagation()"
         ></button>
       } @else {
         <span
-          class="text-sm cursor-text select-none"
-          (dblclick)="
-            node.data.kind === 'folder' && !node.data.isOther &&
-              startRename(node.data.id, node.label)
-          "
+          class="label"
+          (dblclick)="row.kind === 'folder' && !row.isOther && startRename(row.id, row.label)"
         >
-          {{ node.label }}
+          {{ row.label }}
         </span>
       }
 
-      @if (node.data.kind === 'file' && node.data.layout) {
-        <span class="text-[11px] text-gray-400 ml-auto tabular-nums whitespace-nowrap">
-          updated {{ node.data.layout.lastUpdated | date: 'MMM d, HH:mm' }}
-          · viewed {{ node.data.layout.lastViewDate | date: 'MMM d, HH:mm' }}
-          @if (node.data.layout.description) {
-            · {{ node.data.layout.description }}
+      @if (row.kind === 'file' && row.layout) {
+        <span class="meta">
+          updated {{ row.layout.lastUpdated | date: 'MMM d, HH:mm' }}
+          @if (row.layout.description) {
+            · {{ row.layout.description }}
           }
         </span>
       }
 
-      <span class="actions flex gap-0.5 opacity-0 transition-opacity">
-        @if (node.data.kind === 'folder' && editingId() !== node.data.id && !node.data.isOther) {
+      <span class="actions">
+        @if (row.kind === 'folder' && editingId() !== row.id && !row.isOther) {
           <button
             pButton
             icon="fas fa-folder-plus"
@@ -116,7 +131,7 @@
             size="small"
             pTooltip="Add subfolder"
             [disabled]="editingId() !== null"
-            (click)="onAddFolder(node.data.id); $event.stopPropagation()"
+            (click)="onAddFolder(row.id); $event.stopPropagation()"
           ></button>
           <button
             pButton
@@ -125,12 +140,12 @@
             rounded
             size="small"
             pTooltip="Rename"
-            (click)="startRename(node.data.id, node.label); $event.stopPropagation()"
+            (click)="startRename(row.id, row.label); $event.stopPropagation()"
           ></button>
         }
         @if (
-          (node.data.kind === 'file' && !node.data.isOther) ||
-          (node.data.kind === 'folder' && !node.data.isOther && (!node.children || node.children.length === 0))
+          (row.kind === 'file' && !row.isOther) ||
+          (row.kind === 'folder' && !row.isOther && !row.hasChildren)
         ) {
           <button
             pButton
@@ -140,12 +155,18 @@
             size="small"
             severity="danger"
             pTooltip="Delete"
-            (click)="onDelete(node.data); $event.stopPropagation()"
+            (click)="onDelete(row); $event.stopPropagation()"
           ></button>
         }
       </span>
     </div>
-  </ng-template>
+  </cdk-virtual-scroll-viewport>
+
+  @if (flatRows().length === 0 && isFiltering()) {
+    <div class="px-4 py-3 rounded bg-gray-100 text-sm">
+      No results for "{{ filterText() }}"
+    </div>
+  }
 
   <p-confirmDialog></p-confirmDialog>
 </div>

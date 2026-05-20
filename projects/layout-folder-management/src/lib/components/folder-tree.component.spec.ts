@@ -3,7 +3,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import { SessionNode, LayoutInstance, isFolderNode } from '../models/folder-tree.models';
+import {
+  SessionNode,
+  LayoutInstance,
+  isFolderNode,
+  FlatRow,
+} from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -37,6 +42,16 @@ function makeLayouts(): LayoutInstance[] {
   ];
 }
 
+function findRow(rows: readonly FlatRow[], id: string): FlatRow | undefined {
+  return rows.find((r) => r.id === id);
+}
+
+async function settle(fixture: ComponentFixture<FolderTreeComponent>): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+}
+
 // ---------------------------------------------------------------------------
 // Component integration tests
 // ---------------------------------------------------------------------------
@@ -61,143 +76,106 @@ describe('FolderTreeComponent', () => {
   // Creation & basic rendering
   // -----------------------------------------------------------------------
 
-  it('should create the component', () => {
+  it('creates the component', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should render tree nodes when inputs are set', async () => {
+  it('produces a non-empty flat row list when inputs are set', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    expect(component.treeValue().length).toBeGreaterThan(0);
+    expect(component['flatRows']().length).toBeGreaterThan(0);
   });
 
-  it('should project correct labels from layouts', async () => {
+  it('projects layout names onto file rows', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    fixture.componentRef.setInput('selectedFileId', 'file-2'); // expand ancestors
+    await settle(fixture);
 
-    const nodes = component.treeValue();
-    expect(nodes[0].label).toBe('Root Folder');
-    expect(nodes[1].label).toBe('Top Level File');
+    const rows = component['flatRows']();
+    expect(findRow(rows, 'f-root')?.label).toBe('Root Folder');
+    expect(findRow(rows, 'file-top')?.label).toBe('Top Level File');
   });
 
   // -----------------------------------------------------------------------
-  // File selection
+  // File selection / auto-expansion
   // -----------------------------------------------------------------------
 
-  it('should set selectedNode when selectedFileId input is provided', async () => {
-    fixture.componentRef.setInput('sessions', makeSessions());
-    fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.componentRef.setInput('selectedFileId', 'file-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(component.selectedNode()?.key).toBe('file-1');
-  });
-
-  it('should auto-expand ancestor folders for a selected file', async () => {
+  it('auto-expands ancestor folders for a selected file', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     fixture.componentRef.setInput('selectedFileId', 'file-2');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    expect(component.treeValue()[0].expanded).toBe(true);
+    expect(component['expandedIds']().has('f-root')).toBe(true);
+    expect(component['expandedIds']().has('f-nested')).toBe(true);
+    expect(findRow(component['flatRows'](), 'file-2')).toBeDefined();
   });
 
-  it('should return null selectedNode when no file is selected', async () => {
+  it('leaves the tree collapsed when no file is selected', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    expect(component.selectedNode()).toBeNull();
+    expect(component['expandedIds']().size).toBe(0);
+    expect(findRow(component['flatRows'](), 'file-2')).toBeUndefined();
   });
 
   // -----------------------------------------------------------------------
   // Filtering
   // -----------------------------------------------------------------------
 
-  it('should filter tree nodes by search text', async () => {
+  it('filters rows by query and auto-expands ancestors of matches', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['filterText'].set('alpha');
-    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 350));
+    await settle(fixture);
 
-    const allLabels = flattenLabels(component.treeValue());
-    expect(allLabels).toContain('Alpha Report');
-    expect(allLabels).not.toContain('Top Level File');
+    const rows = component['flatRows']();
+    expect(findRow(rows, 'file-1')).toBeDefined();
+    expect(findRow(rows, 'file-top')).toBeUndefined();
+    expect(findRow(rows, 'f-root')?.expanded).toBe(true);
   });
 
-  it('should expand all nodes when filtering', async () => {
+  it('returns empty list when filter matches nothing', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    component['filterText'].set('beta');
-    fixture.detectChanges();
-    await new Promise((r) => setTimeout(r, 350));
-
-    for (const n of component.treeValue()) {
-      if (n.children?.length) expect(n.expanded).toBe(true);
-    }
-  });
-
-  it('should return empty tree when filter matches nothing', async () => {
-    fixture.componentRef.setInput('sessions', makeSessions());
-    fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['filterText'].set('zzzzzzzzz');
-    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 350));
+    await settle(fixture);
 
-    expect(component.treeValue().length).toBe(0);
+    expect(component['flatRows']().length).toBe(0);
     expect(component['isFiltering']()).toBe(true);
   });
 
-  it('should disable drag/drop when filtering', async () => {
+  it('disables drag while filtering', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['filterText'].set('alpha');
-    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 350));
+    await settle(fixture);
 
-    expect(component['isFiltering']()).toBe(true);
+    const aRow = findRow(component['flatRows'](), 'f-root')!;
+    expect(component['canDrag'](aRow)).toBe(false);
   });
 
   // -----------------------------------------------------------------------
   // Rename flow
   // -----------------------------------------------------------------------
 
-  it('should enter rename mode via startRename', async () => {
+  it('enters rename mode via startRename', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['startRename']('f-root', 'Root Folder');
 
@@ -205,12 +183,10 @@ describe('FolderTreeComponent', () => {
     expect(component['editingValue']()).toBe('Root Folder');
   });
 
-  it('should commit rename and update the store', async () => {
+  it('commits rename and updates the store', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['startRename']('f-root', 'Root Folder');
     component['editingValue'].set('New Name');
@@ -222,12 +198,10 @@ describe('FolderTreeComponent', () => {
     if (isFolderNode(session)) expect(session.name).toBe('New Name');
   });
 
-  it('should not commit rename with empty name', async () => {
+  it('rejects rename with empty/whitespace name', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     component['startRename']('f-root', 'Root Folder');
     component['editingValue'].set('   ');
@@ -242,50 +216,43 @@ describe('FolderTreeComponent', () => {
   // Add folder flow
   // -----------------------------------------------------------------------
 
-  it('should add folder at root and enter editing mode', async () => {
+  it('adds a folder at root and enters rename mode', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    const sessionsBefore = component.store.sessions().length;
+    const before = component.store.sessions().length;
     component['onAddFolder']();
 
-    expect(component.store.sessions().length).toBe(sessionsBefore + 1);
+    expect(component.store.sessions().length).toBe(before + 1);
     expect(component['editingId']()).not.toBeNull();
     expect(component['creatingId']()).not.toBeNull();
   });
 
-  it('should remove ephemeral folder on cancel', async () => {
+  it('removes ephemeral folder on cancel', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    const sessionsBefore = component.store.sessions().length;
+    const before = component.store.sessions().length;
     component['onAddFolder']();
     const newId = component['creatingId']()!;
     component['cancelRename'](newId);
 
-    expect(component.store.sessions().length).toBe(sessionsBefore);
+    expect(component.store.sessions().length).toBe(before);
     expect(component['editingId']()).toBeNull();
     expect(component['creatingId']()).toBeNull();
   });
 
-  it('should add subfolder inside a parent folder', async () => {
+  it('adds a subfolder inside a parent and expands it', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     const first = component.store.sessions()[0];
-    expect(isFolderNode(first)).toBe(true);
-    if (!isFolderNode(first)) return;
-
+    if (!isFolderNode(first)) throw new Error('expected folder');
     const childrenBefore = first.children.length;
+
     component['onAddFolder']('f-root');
 
     const updated = component.store.sessions()[0];
@@ -293,34 +260,46 @@ describe('FolderTreeComponent', () => {
       expect(updated.children.length).toBe(childrenBefore + 1);
     }
     expect(component['editingId']()).not.toBeNull();
+    expect(component['expandedIds']().has('f-root')).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Toggle expand
+  // -----------------------------------------------------------------------
+
+  it('toggleExpand flips the expanded set', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    expect(component['expandedIds']().has('f-root')).toBe(false);
+    component['toggleExpand']('f-root');
+    expect(component['expandedIds']().has('f-root')).toBe(true);
+    component['toggleExpand']('f-root');
+    expect(component['expandedIds']().has('f-root')).toBe(false);
   });
 
   // -----------------------------------------------------------------------
   // Delete flow
   // -----------------------------------------------------------------------
 
-  it('should call confirmationService.confirm on delete', async () => {
+  it('opens the confirmation dialog on delete', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     const confirmSpy = vi.spyOn(component['confirmationService'], 'confirm');
-    component['onDelete']({ id: 'file-top', kind: 'file' });
+    const fileRow: FlatRow = {
+      id: 'file-top',
+      kind: 'file',
+      label: 'Top Level File',
+      depth: 0,
+      expanded: false,
+      hasChildren: false,
+    };
+    component['onDelete'](fileRow);
 
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(confirmSpy.mock.calls[0][0].header).toBe('Confirm Deletion');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function flattenLabels(nodes: any[]): string[] {
-  return nodes.flatMap((n) => [
-    ...(n.label ? [n.label] : []),
-    ...(n.children ? flattenLabels(n.children) : []),
-  ]);
-}

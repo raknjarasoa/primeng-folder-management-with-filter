@@ -16,10 +16,6 @@ export function isFolderNode(node: SessionNode): node is FolderNode {
   return node.kind === 'folder';
 }
 
-export function isFileNode(node: SessionNode): node is FileNode {
-  return node.kind === 'file';
-}
-
 export type LayoutInstance = {
   id: string;
   name: string;
@@ -29,9 +25,15 @@ export type LayoutInstance = {
   description?: string;
 }
 
-export type NodeData = {
+// A single visible row in the flattened tree consumed by cdk-virtual-scroll.
+// Produced by flattenSessions() in tree-helpers.
+export interface FlatRow {
   id: string;
   kind: 'folder' | 'file';
+  label: string;
+  depth: number;
+  expanded: boolean;
+  hasChildren: boolean;
   layout?: LayoutInstance;
   isOther?: boolean;
 }

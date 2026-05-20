@@ -1,11 +1,11 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, delay } from 'rxjs';
-import { SessionNode, LayoutInstance } from 'layout-folder-management';
+import { LayoutInstance, SessionNode } from 'layout-folder-management';
+import { delay, Observable, of } from 'rxjs';
 
 // Perf-test seed: 250 generated items arranged into 10 folders × 25 files,
 // nested under a single "Performance test" parent.
-const PERF_FOLDER_COUNT = 10;
-const PERF_FILES_PER_FOLDER = 25;
+const PERF_FOLDER_COUNT = 100;
+const PERF_FILES_PER_FOLDER = 250;
 
 function buildPerfSessions(): SessionNode {
   const folders: SessionNode[] = [];

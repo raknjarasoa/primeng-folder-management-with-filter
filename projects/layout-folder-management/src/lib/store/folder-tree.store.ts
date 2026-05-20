@@ -6,15 +6,8 @@ import {
   withMethods,
   withState,
 } from '@ngrx/signals';
-import { TreeNode } from 'primeng/api';
 
-import {
-  LayoutInstance,
-  NodeData,
-  SessionNode,
-  isFileNode,
-  isFolderNode,
-} from '../models/folder-tree.models';
+import { LayoutInstance, SessionNode } from '../models/folder-tree.models';
 import {
   addFolder,
   collectAncestorIds,
@@ -39,13 +32,12 @@ const initialState: State = {
 export const FolderTreeStore = signalStore(
   withState(initialState),
 
-  withComputed(({ sessions, layoutsById }) => ({
-    treeNodes: computed<TreeNode<NodeData>[]>(() =>
-      toTreeNodes(sessions(), layoutsById()),
-    ),
-  })),
-
   withComputed(({ sessions, layoutsById, selectedFileId }) => ({
+    // IDs of folders to expand so the selected file becomes visible. If the
+    // selection lives inside the real session tree we return that path; if it
+    // only exists as an orphan layout we return the synthetic "Others" path.
+    // The hardcoded ids ('others-root', `others-${uname}`) must stay in sync
+    // with the rows produced by flattenSessions in tree-helpers.ts.
     selectedFileAncestors: computed<string[]>(() => {
       const fileId = selectedFileId();
       if (!fileId) return [];
@@ -77,12 +69,18 @@ export const FolderTreeStore = signalStore(
 
     moveNode(draggedId: string, targetFolderId: string | null, index?: number): void {
       const current = store.sessions();
+      // Reject drops that would create a cycle (folder into itself/descendant).
+      // The drag UI already filters these out, but we guard here too for any
+      // programmatic caller.
       if (targetFolderId !== null && isAncestorOrSelf(current, draggedId, targetFolderId)) return;
       const { forest: without, removed } = removeNode(current, draggedId);
       if (!removed) return;
       patchState(store, { sessions: insertNode(without, removed, targetFolderId, index) });
     },
 
+    // Deletes a node from the session tree. For files we also drop the matching
+    // layoutsById entry so the layout doesn't reappear under "Others", and we
+    // clear the selection if it was pointing at the deleted node.
     deleteNode(id: string): void {
       const { forest } = removeNode(store.sessions(), id);
       const currentLayouts = { ...store.layoutsById() };
@@ -107,87 +105,3 @@ export const FolderTreeStore = signalStore(
 );
 
 export type FolderTreeStore = InstanceType<typeof FolderTreeStore>;
-
-function toTreeNodes(
-  sessions: SessionNode[],
-  layoutsById: Record<string, LayoutInstance>,
-): TreeNode<NodeData>[] {
-  const nodes = sessions.map((s) => sessionToTreeNode(s, layoutsById));
-
-  const sessionFileIds = new Set<string>();
-  const walk = (list: SessionNode[]) => {
-    for (const n of list) {
-      if (isFileNode(n)) sessionFileIds.add(n.id);
-      if (isFolderNode(n)) walk(n.children);
-    }
-  };
-  walk(sessions);
-
-  const othersByUsername: Record<string, LayoutInstance[]> = {};
-  for (const layout of Object.values(layoutsById)) {
-    if (!sessionFileIds.has(layout.id)) {
-      const uname = layout.username || 'Unknown User';
-      (othersByUsername[uname] ??= []).push(layout);
-    }
-  }
-
-  const usernames = Object.keys(othersByUsername).sort();
-  if (usernames.length) {
-    const userFolders: TreeNode<NodeData>[] = usernames.map((uname) => ({
-      key: `others-${uname}`,
-      label: uname,
-      icon: 'fas fa-folder',
-      droppable: false,
-      draggable: false,
-      children: othersByUsername[uname].map((layout) => ({
-        key: layout.id,
-        label: layout.name,
-        icon: 'fas fa-file',
-        droppable: false,
-        draggable: false,
-        leaf: true,
-        data: { id: layout.id, kind: 'file', layout, isOther: true },
-      })),
-      data: { id: `others-${uname}`, kind: 'folder', isOther: true },
-    }));
-
-    nodes.push({
-      key: 'others-root',
-      label: 'Others',
-      icon: 'fas fa-folder',
-      droppable: false,
-      draggable: false,
-      children: userFolders,
-      data: { id: 'others-root', kind: 'folder', isOther: true },
-    });
-  }
-
-  return nodes;
-}
-
-function sessionToTreeNode(
-  s: SessionNode,
-  layoutsById: Record<string, LayoutInstance>,
-): TreeNode<NodeData> {
-  if (isFolderNode(s)) {
-    return {
-      key: s.id,
-      label: s.name,
-      icon: 'fas fa-folder',
-      droppable: true,
-      draggable: true,
-      children: s.children.map((c) => sessionToTreeNode(c, layoutsById)),
-      data: { id: s.id, kind: 'folder' },
-    };
-  }
-  const layout = layoutsById[s.id];
-  return {
-    key: s.id,
-    label: layout?.name ?? `(missing layout: ${s.id})`,
-    icon: 'fas fa-file',
-    droppable: false,
-    draggable: true,
-    leaf: true,
-    data: { id: s.id, kind: 'file', layout },
-  };
-}
