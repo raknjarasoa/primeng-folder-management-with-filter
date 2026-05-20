@@ -17,6 +17,7 @@
           rounded
           size="small"
           class="absolute right-1"
+          pTooltip="Clear search"
           (click)="onFilterChange('')"
         ></button>
       }
@@ -27,6 +28,7 @@
       label="New folder"
       outlined
       size="small"
+      pTooltip="Create a new top-level folder"
       [disabled]="editingId() !== null"
       (click)="onAddFolder()"
     ></button>
@@ -41,7 +43,7 @@
     <div
       *cdkVirtualFor="let row of flatRows(); trackBy: trackRowId; let i = index"
       class="tree-row"
-      [class.tree-row--selected]="row.kind === 'file' && store.selectedFileId() === row.id"
+      [class.tree-row--selected]="row.kind === 'file' && selectedFileId() === row.id"
       [class.tree-row--other]="row.isOther"
       [class.tree-row--target-into]="dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'"
       [style.padding-left.px]="row.depth * INDENT_PX + 4"
@@ -51,7 +53,6 @@
       (cdkDragStarted)="onDragStarted($event, row)"
       (cdkDragMoved)="onDragMoved($event, row)"
       (cdkDragReleased)="onDragReleased($event, row)"
-      (click)="onRowClick(row)"
     >
       @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
         <div class="drop-line drop-line--before"></div>
@@ -77,21 +78,21 @@
         <span class="chevron-spacer"></span>
       }
 
-      <i
-        class="fas shrink-0 text-gray-500"
-        [class.fa-folder]="row.kind === 'folder'"
-        [class.fa-file]="row.kind === 'file'"
-      ></i>
-
-      @if (row.kind === 'folder' && editingId() === row.id) {
+      @if (row.kind === 'file') {
+        <div class="file-content" (click)="onRowClick(row)">
+          <i class="fas fa-file text-gray-500"></i>
+          <span class="label">{{ row.label }}</span>
+        </div>
+      } @else if (editingId() === row.id) {
+        <i class="fas fa-folder shrink-0 text-gray-500"></i>
         <input
           pInputText
-          class="text-sm px-1.5 py-0 h-[22px] min-w-0 flex-1"
+          [pAutoFocus]="true"
+          class="px-1.5 py-0 min-w-0 flex-1"
           [(ngModel)]="editingValue"
           (keydown.enter)="commitRename(row.id)"
           (keydown.escape)="cancelRename(row.id)"
           (click)="$event.stopPropagation()"
-          autofocus
         />
         <button
           pButton
@@ -101,24 +102,19 @@
           size="small"
           severity="success"
           class="shrink-0"
+          pTooltip="Confirm"
           (click)="commitRename(row.id); $event.stopPropagation()"
         ></button>
       } @else {
-        <span
-          class="label"
-          (dblclick)="row.kind === 'folder' && !row.isOther && startRename(row.id, row.label)"
-        >
-          {{ row.label }}
-        </span>
-      }
-
-      @if (row.kind === 'file' && row.layout) {
-        <span class="meta">
-          updated {{ row.layout.lastUpdated | date: 'MMM d, HH:mm' }}
-          @if (row.layout.description) {
-            · {{ row.layout.description }}
-          }
-        </span>
+        <div class="folder-content">
+          <i class="fas fa-folder text-gray-500"></i>
+          <span
+            class="label"
+            (dblclick)="!row.isOther && startRename(row.id, row.label)"
+          >
+            {{ row.label }}
+          </span>
+        </div>
       }
 
       <span class="actions">
@@ -143,10 +139,7 @@
             (click)="startRename(row.id, row.label); $event.stopPropagation()"
           ></button>
         }
-        @if (
-          (row.kind === 'file' && !row.isOther) ||
-          (row.kind === 'folder' && !row.isOther && !row.hasChildren)
-        ) {
+        @if (row.kind === 'folder' && !row.isOther && !row.hasChildren) {
           <button
             pButton
             icon="fas fa-trash"
@@ -167,6 +160,4 @@
       No results for "{{ filterText() }}"
     </div>
   }
-
-  <p-confirmDialog></p-confirmDialog>
 </div>

@@ -1,22 +1,22 @@
 import {
-  FlatRow,
-  LayoutInstance,
-  SessionNode,
+  FlatRowData,
+  TreeItem,
   isFolderNode,
 } from '../models/folder-tree.models';
+import { LayoutInstance } from '../models/layout-instance.model';
 
 export interface NodeLocation {
-  node: SessionNode;
-  parent: SessionNode | null;
+  node: TreeItem;
+  parent: TreeItem | null;
   index: number;
-  siblings: SessionNode[];
+  siblings: TreeItem[];
 }
 
 export function findLocation(
-  forest: SessionNode[],
+  forest: TreeItem[],
   id: string,
 ): NodeLocation | null {
-  const stack: Array<{ siblings: SessionNode[]; parent: SessionNode | null }> = [
+  const stack: Array<{ siblings: TreeItem[]; parent: TreeItem | null }> = [
     { siblings: forest, parent: null },
   ];
   while (stack.length) {
@@ -33,7 +33,7 @@ export function findLocation(
 }
 
 export function isAncestorOrSelf(
-  forest: SessionNode[],
+  forest: TreeItem[],
   ancestorId: string,
   descendantId: string,
 ): boolean {
@@ -44,12 +44,12 @@ export function isAncestorOrSelf(
 }
 
 export function removeNode(
-  forest: SessionNode[],
+  forest: TreeItem[],
   id: string,
-): { forest: SessionNode[]; removed: SessionNode | null } {
-  let removed: SessionNode | null = null;
+): { forest: TreeItem[]; removed: TreeItem | null } {
+  let removed: TreeItem | null = null;
 
-  function remove(nodes: SessionNode[]): SessionNode[] {
+  function remove(nodes: TreeItem[]): TreeItem[] {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (node.id === id) {
@@ -75,18 +75,18 @@ export function removeNode(
 }
 
 export function insertNode(
-  forest: SessionNode[],
-  nodeToInsert: SessionNode,
+  forest: TreeItem[],
+  nodeToInsert: TreeItem,
   targetFolderId: string | null,
   index?: number,
-): SessionNode[] {
+): TreeItem[] {
   if (targetFolderId === null) {
     const newForest = [...forest];
     newForest.splice(index ?? newForest.length, 0, nodeToInsert);
     return newForest;
   }
 
-  function insert(nodes: SessionNode[]): SessionNode[] {
+  function insert(nodes: TreeItem[]): TreeItem[] {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (node.id === targetFolderId && isFolderNode(node)) {
@@ -116,11 +116,11 @@ export function insertNode(
 }
 
 export function renameFolder(
-  forest: SessionNode[],
+  forest: TreeItem[],
   id: string,
   newName: string,
-): SessionNode[] {
-  function rename(nodes: SessionNode[]): SessionNode[] {
+): TreeItem[] {
+  function rename(nodes: TreeItem[]): TreeItem[] {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (node.id === id && isFolderNode(node)) {
@@ -145,24 +145,24 @@ export function renameFolder(
 }
 
 export function addFolder(
-  forest: SessionNode[],
+  forest: TreeItem[],
   parentFolderId: string | null,
   name: string,
-): { forest: SessionNode[]; newId: string } {
+): { forest: TreeItem[]; newId: string } {
   const newId = `f-${Date.now().toString(36)}`;
-  const folder: SessionNode = { id: newId, kind: 'folder', name, children: [] };
+  const folder: TreeItem = { id: newId, kind: 'folder', name, children: [] };
   return { forest: insertNode(forest, folder, parentFolderId, 0), newId };
 }
 
 export function collectAncestorIds(
-  forest: SessionNode[],
+  forest: TreeItem[],
   targetId: string,
 ): string[] | null {
   const path: string[] = [];
   return walkPath(forest, targetId, path) ? path : null;
 }
 
-function walkPath(nodes: SessionNode[], targetId: string, path: string[]): boolean {
+function walkPath(nodes: TreeItem[], targetId: string, path: string[]): boolean {
   for (const node of nodes) {
     if (node.id === targetId) return true;
     if (isFolderNode(node) && node.children.length) {
@@ -178,7 +178,7 @@ function walkPath(nodes: SessionNode[], targetId: string, path: string[]): boole
 // itself). Used during drag to disallow dropping a folder into its own
 // descendants in O(1) lookups rather than an O(N) tree walk per move event.
 export function collectSubtreeIds(
-  forest: SessionNode[],
+  forest: TreeItem[],
   rootId: string,
 ): Set<string> {
   const out = new Set<string>();
@@ -189,7 +189,7 @@ export function collectSubtreeIds(
   return out;
 }
 
-function collectAllIds(nodes: SessionNode[], out: Set<string>): void {
+function collectAllIds(nodes: TreeItem[], out: Set<string>): void {
   for (const n of nodes) {
     out.add(n.id);
     if (isFolderNode(n)) collectAllIds(n.children, out);
@@ -204,13 +204,13 @@ export const OTHERS_ROOT_ID = 'others-root';
 const OTHERS_USER_PREFIX = 'others-';
 
 export function flattenSessions(
-  sessions: SessionNode[],
+  sessions: TreeItem[],
   layoutsById: Record<string, LayoutInstance>,
   expandedIds: ReadonlySet<string>,
   filter = '',
-): FlatRow[] {
+): FlatRowData[] {
   const query = filter.trim().toLowerCase();
-  const result: FlatRow[] = [];
+  const result: FlatRowData[] = [];
 
   // Group orphan layouts by username for the "Others" subtree.
   const sessionFileIds = collectSessionFileIds(sessions);
@@ -236,7 +236,7 @@ export function flattenSessions(
     includeSet !== null ? includeSet.has(id) : expandedIds.has(id);
 
   // Walk the real sessions.
-  const walk = (nodes: SessionNode[], depth: number): void => {
+  const walk = (nodes: TreeItem[], depth: number): void => {
     for (const node of nodes) {
       if (includeSet && !includeSet.has(node.id)) continue;
       if (isFolderNode(node)) {
@@ -321,9 +321,9 @@ export function flattenSessions(
   return result;
 }
 
-function collectSessionFileIds(sessions: SessionNode[]): Set<string> {
+function collectSessionFileIds(sessions: TreeItem[]): Set<string> {
   const ids = new Set<string>();
-  const walk = (nodes: SessionNode[]): void => {
+  const walk = (nodes: TreeItem[]): void => {
     for (const n of nodes) {
       if (isFolderNode(n)) walk(n.children);
       else ids.add(n.id);
@@ -334,7 +334,7 @@ function collectSessionFileIds(sessions: SessionNode[]): Set<string> {
 }
 
 function buildIncludeSet(
-  nodes: SessionNode[],
+  nodes: TreeItem[],
   layoutsById: Record<string, LayoutInstance>,
   query: string,
   out: Set<string>,

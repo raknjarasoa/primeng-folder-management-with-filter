@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { LayoutInstance, SessionNode } from 'layout-folder-management';
+import { LayoutInstance, TreeItem } from 'layout-folder-management';
 import { delay, Observable, of } from 'rxjs';
 
 // Perf-test seed: 250 generated items arranged into 10 folders × 25 files,
@@ -7,10 +7,10 @@ import { delay, Observable, of } from 'rxjs';
 const PERF_FOLDER_COUNT = 100;
 const PERF_FILES_PER_FOLDER = 250;
 
-function buildPerfSessions(): SessionNode {
-  const folders: SessionNode[] = [];
+function buildPerfSessions(): TreeItem {
+  const folders: TreeItem[] = [];
   for (let f = 0; f < PERF_FOLDER_COUNT; f++) {
-    const children: SessionNode[] = [];
+    const children: TreeItem[] = [];
     for (let i = 0; i < PERF_FILES_PER_FOLDER; i++) {
       children.push({ id: `perf-${f}-${i}`, kind: 'file' });
     }
@@ -32,8 +32,10 @@ function buildPerfLayouts(): LayoutInstance[] {
       layouts.push({
         id: `perf-${f}-${i}`,
         name: `Perf layout #${idx + 1}`,
-        lastUpdated: '2026-05-04T08:00:00Z',
-        lastViewDate: '2026-05-04T09:00:00Z',
+        editable: false,
+        username: '',
+        description: '',
+        tooltip: '',
       });
     }
   }
@@ -43,8 +45,8 @@ function buildPerfLayouts(): LayoutInstance[] {
 @Injectable({ providedIn: 'root' })
 export class FolderApiService {
   // --- Instance 1 Data (e.g. User 1) ---
-  fetchSessions1(): Observable<SessionNode[]> {
-    const tree: SessionNode[] = [
+  fetchSessions1(): Observable<TreeItem[]> {
+    const tree: TreeItem[] = [
       {
         id: 'f-trading',
         kind: 'folder',
@@ -80,19 +82,19 @@ export class FolderApiService {
 
   fetchLayouts1(): Observable<LayoutInstance[]> {
     const layouts: LayoutInstance[] = [
-      { id: 'v-001', name: 'EUR/USD intraday', lastUpdated: '2026-04-29T08:12:00Z', lastViewDate: '2026-05-03T14:01:00Z' },
-      { id: 'v-002', name: 'FX volatility surface', lastUpdated: '2026-04-22T10:30:00Z', lastViewDate: '2026-05-01T09:45:00Z' },
-      { id: 'v-003', name: 'CAC 40 momentum', lastUpdated: '2026-05-02T16:00:00Z', lastViewDate: '2026-05-04T07:30:00Z' },
-      { id: 'v-004', name: 'S&P sector heatmap', lastUpdated: '2026-04-15T12:00:00Z', lastViewDate: '2026-04-28T11:20:00Z' },
-      { id: 'v-005', name: 'VaR by book', lastUpdated: '2026-05-03T18:45:00Z', lastViewDate: '2026-05-04T08:15:00Z' },
-      { id: 'v-006', name: 'Stress scenarios Q2', lastUpdated: '2026-04-30T11:00:00Z', lastViewDate: '2026-05-02T13:00:00Z' },
-      { id: 'v-007', name: 'Daily P&L summary', lastUpdated: '2026-05-04T06:00:00Z', lastViewDate: '2026-05-04T09:00:00Z' },
+      { id: 'v-001', name: 'EUR/USD intraday', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-002', name: 'FX volatility surface', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-003', name: 'CAC 40 momentum', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-004', name: 'S&P sector heatmap', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-005', name: 'VaR by book', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-006', name: 'Stress scenarios Q2', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-007', name: 'Daily P&L summary', editable: true, username: '', description: '', tooltip: '' },
 
       // Data not present in sessions1 (Will be grouped under "Others")
-      { id: 'v-other1', name: 'John Doe Report', lastUpdated: '2026-05-04T10:12:00Z', lastViewDate: '2026-05-04T10:15:00Z', username: 'John', description: 'Daily report' },
-      { id: 'v-other2', name: 'John Doe Summary', lastUpdated: '2026-05-04T11:30:00Z', lastViewDate: '2026-05-04T11:45:00Z', username: 'John', description: 'Summary data' },
-      { id: 'v-other3', name: 'Alice Draft', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z', username: 'Alice', description: 'Working draft' },
-      { id: 'v-other4', name: 'Unknown Data', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z' },
+      { id: 'v-other1', name: 'John Doe Report', editable: false, username: 'John', description: 'Daily report', tooltip: '' },
+      { id: 'v-other2', name: 'John Doe Summary', editable: false, username: 'John', description: 'Summary data', tooltip: '' },
+      { id: 'v-other3', name: 'Alice Draft', editable: false, username: 'Alice', description: 'Working draft', tooltip: '' },
+      { id: 'v-other4', name: 'Unknown Data', editable: false, username: '', description: '', tooltip: '' },
 
       ...buildPerfLayouts(),
     ];
@@ -100,8 +102,8 @@ export class FolderApiService {
   }
 
   // --- Instance 2 Data (e.g. User 2) ---
-  fetchSessions2(): Observable<SessionNode[]> {
-    const tree: SessionNode[] = [
+  fetchSessions2(): Observable<TreeItem[]> {
+    const tree: TreeItem[] = [
       {
         id: 'f-crypto',
         kind: 'folder',
@@ -125,9 +127,9 @@ export class FolderApiService {
 
   fetchLayouts2(): Observable<LayoutInstance[]> {
     const layouts: LayoutInstance[] = [
-      { id: 'v-101', name: 'BTC/USDT Volume', lastUpdated: '2026-05-04T10:12:00Z', lastViewDate: '2026-05-04T10:15:00Z' },
-      { id: 'v-102', name: 'ETH Gas Tracker', lastUpdated: '2026-05-04T11:30:00Z', lastViewDate: '2026-05-04T11:45:00Z' },
-      { id: 'v-103', name: 'Uniswap Liquidity', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z' },
+      { id: 'v-101', name: 'BTC/USDT Volume', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-102', name: 'ETH Gas Tracker', editable: true, username: '', description: '', tooltip: '' },
+      { id: 'v-103', name: 'Uniswap Liquidity', editable: true, username: '', description: '', tooltip: '' },
     ];
     return of(layouts).pipe(delay(200));
   }

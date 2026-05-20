@@ -7,7 +7,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "paths": {
       "layout-folder-management": [
-        "./dist/layout-folder-management"
+        "./projects/layout-folder-management/src/public-api.ts"
       ]
     },
     "noImplicitReturns": true,

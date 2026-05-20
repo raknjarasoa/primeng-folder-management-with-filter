@@ -17,21 +17,15 @@
   height: 28px;
   padding-right: 4px;
   font-size: 13px;
-  cursor: pointer;
+  cursor: default;
   position: relative;
   user-select: none;
   border-radius: 3px;
   transition: background-color 80ms;
   overflow: hidden;
 
-  &:hover {
-    background: #f3f4f6;
-  }
-
-  &.tree-row--selected {
-    background: #dbeafe;
-  }
-
+  // Drag-into highlight stays row-wide — it's about the drop target, not
+  // the file's content box.
   &.tree-row--target-into {
     background: rgba(59, 130, 246, 0.15);
     outline: 1px solid #3b82f6;
@@ -41,6 +35,12 @@
   &.tree-row--other {
     cursor: default;
   }
+}
+
+// Folder rows keep the full-row hover so the action buttons on the right
+// stay visually grouped with the row they belong to.
+.tree-row:not(:has(.file-content)):hover {
+  background: #f3f4f6;
 }
 
 .chevron,
@@ -66,26 +66,57 @@
 }
 
 .label {
-  flex: 1;
   min-width: 0;
+  height: 22px;
+  line-height: 22px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.meta {
-  font-size: 11px;
-  color: #9ca3af;
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  margin-left: auto;
+// Pin the inline rename input to the exact same box as `.label`, so toggling
+// a folder between display and edit modes doesn't visually shift the row.
+// pInputText's default padding/min-height would otherwise grow the box.
+.tree-row input.p-inputtext {
+  height: 22px;
+  line-height: 1;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+// Icon + label wrapper used by both file and folder display rows. The second
+// track sizes to `max-content` so the box hugs the label when short; combined
+// with `min-width: 0` and the label's `text-overflow: ellipsis` it truncates
+// when the row would otherwise overflow. The hit area for click / dblclick is
+// limited to this box, not the empty space beside it.
+.file-content,
+.folder-content {
+  display: grid;
+  grid-template-columns: 13px minmax(0, max-content);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  border-radius: 3px;
+  transition: background-color 80ms;
+}
+
+.file-content {
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.tree-row--selected .file-content {
+  background: #dbeafe;
 }
 
 .actions {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
+  margin-left: auto;
   opacity: 0;
   transition: opacity 80ms;
 
