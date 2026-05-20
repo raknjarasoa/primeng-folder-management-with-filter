@@ -7,10 +7,13 @@ import {
 } from '@angular/cdk/drag-drop';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
+  inject,
   input,
   linkedSignal,
   model,
@@ -219,6 +222,21 @@ export class FolderTreeComponent {
           return next;
         });
       });
+    });
+
+    // Keep the cdk-virtual-scroll viewport in sync with its container size.
+    // The hidden→visible transition that happens when this component lives
+    // inside an overlay (e.g. <p-popover>) isn't always caught by CDK's own
+    // resize observation, so we attach one here that calls checkViewportSize
+    // on every resize. Initial measurement runs once via afterNextRender.
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      const vp = this.viewport();
+      if (!vp) return;
+      vp.checkViewportSize();
+      const observer = new ResizeObserver(() => vp.checkViewportSize());
+      observer.observe(vp.elementRef.nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
     });
   }
 

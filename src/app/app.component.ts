@@ -1,25 +1,39 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FolderTreeComponent, TreeItem, LayoutInstance } from 'layout-folder-management';
+import { ButtonModule } from 'primeng/button';
+import { Popover } from 'primeng/popover';
 import { FolderApiService } from './services/folder-api.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FolderTreeComponent],
+  imports: [ButtonModule, Popover, FolderTreeComponent],
   template: `
     <div class="p-6">
       @if (sessions1().length > 0 && layouts1().length > 0) {
-        <div class="mb-3 text-sm">
-          Selected:
-          <span class="font-medium">{{ selectedFileName() ?? 'None' }}</span>
+        <div class="flex items-center gap-3 mb-4">
+          <button
+            pButton
+            icon="fas fa-folder-tree"
+            label="Layouts"
+            outlined
+            (click)="treePopover.toggle($event)"
+          ></button>
+          <span class="text-sm">
+            Selected:
+            <span class="font-medium">{{ selectedFileName() ?? 'None' }}</span>
+          </span>
         </div>
-        <app-folder-tree
-          [(sessions)]="sessions1"
-          [layouts]="layouts1()"
-          [(selectedFileId)]="selectedFileId1"
-          (fileSelected)="onFileClicked($event)"
-        />
+
+        <p-popover #treePopover [style]="{ width: '500px' }">
+          <app-folder-tree
+            [(sessions)]="sessions1"
+            [layouts]="layouts1()"
+            [(selectedFileId)]="selectedFileId1"
+            (fileSelected)="onFileClicked($event); treePopover.hide()"
+          />
+        </p-popover>
       } @else {
         <div class="p-6 text-gray-500">Loading…</div>
       }
