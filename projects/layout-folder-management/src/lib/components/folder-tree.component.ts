@@ -392,33 +392,13 @@ export class FolderTreeComponent {
     const value = this.editingValue().trim();
     if (this.editingId() !== id || !value) return;
 
-    // Duplicate-name check against same-depth siblings within parent
-    const rows = this.flatRows();
-    const idx = rows.findIndex((r) => r.id === id);
-    if (idx >= 0) {
-      const target = rows[idx];
-      const siblings: FlatRowData[] = [];
-      for (let i = idx + 1; i < rows.length && rows[i].depth >= target.depth; i++) {
-        if (rows[i].depth === target.depth) siblings.push(rows[i]);
-      }
-      for (let i = idx - 1; i >= 0 && rows[i].depth >= target.depth; i--) {
-        if (rows[i].depth === target.depth) siblings.push(rows[i]);
-      }
-      const duplicate = siblings.some(
-        (s) => s.id !== id && s.label.toLowerCase() === value.toLowerCase(),
-      );
-      // Silently abort on duplicate — caller stays in edit mode so the user
-      // can pick a different name.
-      if (duplicate) return;
-    }
-
     this.sessions.set(renameFolder(this.sessions(), id, value));
     this.editingId.set(null);
     this.creatingId.set(null);
   }
 
-  protected cancelRename(id?: string): void {
-    const targetId = id ?? this.editingId();
+  protected cancelRename(): void {
+    const targetId = this.editingId();
     if (targetId && targetId === this.creatingId()) {
       this.deleteNode(targetId);
     }

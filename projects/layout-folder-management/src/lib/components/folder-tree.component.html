@@ -29,7 +29,7 @@
       outlined
       size="small"
       pTooltip="Create a new top-level folder"
-      [disabled]="editingId() !== null"
+      [disabled]="editingId() !== null || isFiltering()"
       (click)="onAddFolder()"
     ></button>
   </div>
@@ -91,7 +91,7 @@
           class="px-1.5 py-0 min-w-0 flex-1"
           [(ngModel)]="editingValue"
           (keydown.enter)="commitRename(row.id)"
-          (keydown.escape)="cancelRename(row.id)"
+          (keydown.escape)="cancelRename()"
           (click)="$event.stopPropagation()"
         />
         <button
@@ -126,7 +126,7 @@
             rounded
             size="small"
             pTooltip="Add subfolder"
-            [disabled]="editingId() !== null"
+            [disabled]="editingId() !== null || isFiltering()"
             (click)="onAddFolder(row.id); $event.stopPropagation()"
           ></button>
           <button
@@ -136,10 +136,11 @@
             rounded
             size="small"
             pTooltip="Rename"
+            [disabled]="isFiltering()"
             (click)="startRename(row.id, row.label); $event.stopPropagation()"
           ></button>
         }
-        @if (row.kind === 'folder' && !row.isOther && !row.hasChildren) {
+        @if (row.kind === 'folder' && !row.isOther) {
           <button
             pButton
             icon="fas fa-trash"
@@ -148,6 +149,7 @@
             size="small"
             severity="danger"
             pTooltip="Delete"
+            [disabled]="row.hasChildren"
             (click)="onDelete(row); $event.stopPropagation()"
           ></button>
         }

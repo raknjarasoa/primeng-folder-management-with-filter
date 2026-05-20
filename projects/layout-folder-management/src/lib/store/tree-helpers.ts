@@ -279,7 +279,7 @@ export function flattenSessions(
     result.push({
       id: OTHERS_ROOT_ID,
       kind: 'folder',
-      label: 'Others',
+      label: 'Other Users',
       depth: 0,
       expanded: rootExpanded,
       hasChildren: true,
