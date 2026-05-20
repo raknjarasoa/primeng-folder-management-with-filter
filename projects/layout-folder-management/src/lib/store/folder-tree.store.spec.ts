@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Component, inject } from '@angular/core';
 
 import { FolderTreeStore } from './folder-tree.store';
-import { SessionNode, Layout, isFolder } from '../models/folder-tree.models';
+import { SessionNode, LayoutInstance, isFolderNode } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Shared test data
@@ -31,7 +31,7 @@ function makeSessions(): SessionNode[] {
   ];
 }
 
-function makeLayouts(): Layout[] {
+function makeLayouts(): LayoutInstance[] {
   return [
     { id: 'v-001', name: 'EUR/USD', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
     { id: 'v-002', name: 'CAC 40', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
@@ -154,11 +154,11 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.moveNode('v-003', 'f-equity');
       const trading = store.sessions()[0];
-      expect(isFolder(trading)).toBe(true);
-      if (isFolder(trading)) {
+      expect(isFolderNode(trading)).toBe(true);
+      if (isFolderNode(trading)) {
         const equity = trading.children.find((c) => c.id === 'f-equity');
         expect(equity).toBeDefined();
-        if (equity && isFolder(equity)) {
+        if (equity && isFolderNode(equity)) {
           expect(equity.children.some((c) => c.id === 'v-003')).toBe(true);
         }
       }
@@ -194,8 +194,8 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.deleteNode('v-001');
       const trading = store.sessions()[0];
-      expect(isFolder(trading)).toBe(true);
-      if (isFolder(trading)) expect(trading.children.length).toBe(1);
+      expect(isFolderNode(trading)).toBe(true);
+      if (isFolderNode(trading)) expect(trading.children.length).toBe(1);
     });
 
     it('clears selectedFileId when the selected node is deleted', () => {
@@ -222,22 +222,22 @@ describe('FolderTreeStore', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', 'Renamed');
       const node = store.sessions()[0];
-      expect(isFolder(node)).toBe(true);
-      if (isFolder(node)) expect(node.name).toBe('Renamed');
+      expect(isFolderNode(node)).toBe(true);
+      if (isFolderNode(node)) expect(node.name).toBe('Renamed');
     });
 
     it('trims whitespace', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '  Trimmed  ');
       const node = store.sessions()[0];
-      if (isFolder(node)) expect(node.name).toBe('Trimmed');
+      if (isFolderNode(node)) expect(node.name).toBe('Trimmed');
     });
 
     it('ignores empty name', () => {
       store.initData(makeSessions(), makeLayouts());
       store.renameFolder('f-trading', '   ');
       const node = store.sessions()[0];
-      if (isFolder(node)) expect(node.name).toBe('Trading');
+      if (isFolderNode(node)) expect(node.name).toBe('Trading');
     });
   });
 
@@ -252,19 +252,19 @@ describe('FolderTreeStore', () => {
       const newNode = store.sessions()[0];
       expect(newId).toBeTruthy();
       expect(newNode.id).toBe(newId);
-      expect(isFolder(newNode)).toBe(true);
-      if (isFolder(newNode)) expect(newNode.name).toBe('New Folder');
+      expect(isFolderNode(newNode)).toBe(true);
+      if (isFolderNode(newNode)) expect(newNode.name).toBe('New Folder');
     });
 
     it('adds a subfolder inside an existing folder', () => {
       store.initData(makeSessions(), makeLayouts());
       const newId = store.addFolder('f-trading', 'Subfolder');
       const trading = store.sessions()[0];
-      expect(isFolder(trading)).toBe(true);
-      if (isFolder(trading)) {
+      expect(isFolderNode(trading)).toBe(true);
+      if (isFolderNode(trading)) {
         expect(trading.children[0].id).toBe(newId);
         const sub = trading.children[0];
-        if (isFolder(sub)) expect(sub.name).toBe('Subfolder');
+        if (isFolderNode(sub)) expect(sub.name).toBe('Subfolder');
       }
     });
   });

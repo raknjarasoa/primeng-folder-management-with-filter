@@ -24,7 +24,7 @@ import { TreeDragDropService, TreeNode, ConfirmationService } from 'primeng/api'
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 
 import { FolderTreeStore } from '../store/folder-tree.store';
-import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
+import { NodeData, SessionNode, LayoutInstance } from '../models/folder-tree.models';
 
 @Component({
   selector: 'app-folder-tree',
@@ -47,7 +47,7 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
 })
 export class FolderTreeComponent {
   sessions = model.required<SessionNode[]>();
-  layouts = input<Layout[]>([]);
+  layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
 
   protected readonly store = inject(FolderTreeStore);

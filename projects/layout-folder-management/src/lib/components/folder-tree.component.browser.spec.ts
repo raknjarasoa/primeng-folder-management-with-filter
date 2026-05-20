@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import type { SessionNode, Layout } from '../models/folder-tree.models';
+import type { SessionNode, LayoutInstance } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Static test data
@@ -28,7 +28,7 @@ const SESSIONS: SessionNode[] = [
   { id: 'file-top', kind: 'file' },
 ];
 
-const LAYOUTS: Layout[] = [
+const LAYOUTS: LayoutInstance[] = [
   { id: 'file-1', name: 'Alpha Report', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
   { id: 'file-2', name: 'Beta Dashboard', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
   { id: 'file-top', name: 'Top Level File', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },

@@ -16,3 +16,115 @@ Application bundle generation complete. [3.040 seconds]
 Watch mode enabled. Watching for file changes...
 NOTE: Raw file sizes do not reflect development server per-request transformations.
   ➜  Local:   http://localhost:4200/
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [2.955 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2305: Module '"layout-folder-management"' has no exported member 'LayoutInstance'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:2:43:
+[37m      2 │ ...eComponent, SessionNode, [32mLayoutInstance[37m } from 'layout-folder-ma...
+        ╵                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2305: Module '"layout-folder-management"' has no exported member 'LayoutInstance'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/folder-api.service.ts:3:22:
+[37m      3 │ import { SessionNode, [32mLayoutInstance[37m } from 'layout-folder-manageme...
+        ╵                       [32m~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [1.146 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:2:65:
+[37m      2 │ ...ent, SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS-991010: 'imports' must be an array of components, directives, pipes, or NgModules.
+  Value could not be determined statically.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+  Unknown reference.
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/folder-api.service.ts:3:44:
+[37m      3 │ ...rt { SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.010 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:2:65:
+[37m      2 │ ...ent, SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS-991010: 'imports' must be an array of components, directives, pipes, or NgModules.
+  Value could not be determined statically.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+  Unknown reference.
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/folder-api.service.ts:3:44:
+[37m      3 │ ...rt { SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.002 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:2:65:
+[37m      2 │ ...ent, SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS-991010: 'imports' must be an array of components, directives, pipes, or NgModules.
+  Value could not be determined statically.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+  Unknown reference.
+
+    src/app/app.component.ts:9:12:
+[37m      9 │   imports: [[32mFolderTreeComponent[37m],
+        ╵             [32m~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module 'layout-folder-management' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/folder-api.service.ts:3:44:
+[37m      3 │ ...rt { SessionNode, LayoutInstance } from [32m'layout-folder-management'[37m;
+        ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m

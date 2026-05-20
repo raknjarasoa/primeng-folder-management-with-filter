@@ -9,11 +9,11 @@ import {
 import { TreeNode } from 'primeng/api';
 
 import {
-  Layout,
+  LayoutInstance,
   NodeData,
   SessionNode,
-  isFile,
-  isFolder,
+  isFileNode,
+  isFolderNode,
 } from '../models/folder-tree.models';
 import {
   addFolder,
@@ -26,7 +26,7 @@ import {
 
 type State = {
   sessions: SessionNode[];
-  layoutsById: Record<string, Layout>;
+  layoutsById: Record<string, LayoutInstance>;
   selectedFileId: string | null;
 };
 
@@ -64,7 +64,7 @@ export const FolderTreeStore = signalStore(
   })),
 
   withMethods((store) => ({
-    initData(sessions: SessionNode[], layouts: Layout[]): void {
+    initData(sessions: SessionNode[], layouts: LayoutInstance[]): void {
       patchState(store, {
         sessions,
         layoutsById: Object.fromEntries(layouts.map((l) => [l.id, l])),
@@ -110,20 +110,20 @@ export type FolderTreeStore = InstanceType<typeof FolderTreeStore>;
 
 function toTreeNodes(
   sessions: SessionNode[],
-  layoutsById: Record<string, Layout>,
+  layoutsById: Record<string, LayoutInstance>,
 ): TreeNode<NodeData>[] {
   const nodes = sessions.map((s) => sessionToTreeNode(s, layoutsById));
 
   const sessionFileIds = new Set<string>();
   const walk = (list: SessionNode[]) => {
     for (const n of list) {
-      if (isFile(n)) sessionFileIds.add(n.id);
-      if (isFolder(n)) walk(n.children);
+      if (isFileNode(n)) sessionFileIds.add(n.id);
+      if (isFolderNode(n)) walk(n.children);
     }
   };
   walk(sessions);
 
-  const othersByUsername: Record<string, Layout[]> = {};
+  const othersByUsername: Record<string, LayoutInstance[]> = {};
   for (const layout of Object.values(layoutsById)) {
     if (!sessionFileIds.has(layout.id)) {
       const uname = layout.username || 'Unknown User';
@@ -167,9 +167,9 @@ function toTreeNodes(
 
 function sessionToTreeNode(
   s: SessionNode,
-  layoutsById: Record<string, Layout>,
+  layoutsById: Record<string, LayoutInstance>,
 ): TreeNode<NodeData> {
-  if (isFolder(s)) {
+  if (isFolderNode(s)) {
     return {
       key: s.id,
       label: s.name,

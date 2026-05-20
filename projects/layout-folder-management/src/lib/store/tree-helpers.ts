@@ -1,4 +1,4 @@
-import { SessionNode, isFolder } from '../models/folder-tree.models';
+import { SessionNode, isFolderNode } from '../models/folder-tree.models';
 
 export interface NodeLocation {
   node: SessionNode;
@@ -19,7 +19,7 @@ export function findLocation(
     for (let i = 0; i < siblings.length; i++) {
       const node = siblings[i];
       if (node.id === id) return { node, parent, index: i, siblings };
-      if (isFolder(node) && node.children.length) {
+      if (isFolderNode(node) && node.children.length) {
         stack.push({ siblings: node.children, parent: node });
       }
     }
@@ -34,7 +34,7 @@ export function isAncestorOrSelf(
 ): boolean {
   if (ancestorId === descendantId) return true;
   const loc = findLocation(forest, ancestorId);
-  if (!loc || !isFolder(loc.node)) return false;
+  if (!loc || !isFolderNode(loc.node)) return false;
   return findLocation(loc.node.children, descendantId) !== null;
 }
 
@@ -53,7 +53,7 @@ export function removeNode(
         newNodes.splice(i, 1);
         return newNodes;
       }
-      if (isFolder(node) && node.children) {
+      if (isFolderNode(node) && node.children) {
         const newChildren = remove(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -84,14 +84,14 @@ export function insertNode(
   function insert(nodes: SessionNode[]): SessionNode[] {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
-      if (node.id === targetFolderId && isFolder(node)) {
+      if (node.id === targetFolderId && isFolderNode(node)) {
         const newNodes = [...nodes];
         const newChildren = [...node.children];
         newChildren.splice(index ?? newChildren.length, 0, nodeToInsert);
         newNodes[i] = { ...node, children: newChildren };
         return newNodes;
       }
-      if (isFolder(node) && node.children) {
+      if (isFolderNode(node) && node.children) {
         const newChildren = insert(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -118,12 +118,12 @@ export function renameFolder(
   function rename(nodes: SessionNode[]): SessionNode[] {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
-      if (node.id === id && isFolder(node)) {
+      if (node.id === id && isFolderNode(node)) {
         const newNodes = [...nodes];
         newNodes[i] = { ...node, name: newName };
         return newNodes;
       }
-      if (isFolder(node) && node.children) {
+      if (isFolderNode(node) && node.children) {
         const newChildren = rename(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -160,7 +160,7 @@ export function collectAncestorIds(
 function walkPath(nodes: SessionNode[], targetId: string, path: string[]): boolean {
   for (const node of nodes) {
     if (node.id === targetId) return true;
-    if (isFolder(node) && node.children.length) {
+    if (isFolderNode(node) && node.children.length) {
       path.push(node.id);
       if (walkPath(node.children, targetId, path)) return true;
       path.pop();

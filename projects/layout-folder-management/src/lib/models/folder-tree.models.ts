@@ -12,15 +12,15 @@ export interface FileNode {
 
 export type SessionNode = FolderNode | FileNode;
 
-export function isFolder(node: SessionNode): node is FolderNode {
+export function isFolderNode(node: SessionNode): node is FolderNode {
   return node.kind === 'folder';
 }
 
-export function isFile(node: SessionNode): node is FileNode {
+export function isFileNode(node: SessionNode): node is FileNode {
   return node.kind === 'file';
 }
 
-export interface Layout {
+export type LayoutInstance = {
   id: string;
   name: string;
   lastUpdated: string;
@@ -29,9 +29,9 @@ export interface Layout {
   description?: string;
 }
 
-export interface NodeData {
+export type NodeData = {
   id: string;
   kind: 'folder' | 'file';
-  layout?: Layout;
+  layout?: LayoutInstance;
   isOther?: boolean;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SessionNode, isFolder } from '../models/folder-tree.models';
+import { SessionNode, isFolderNode } from '../models/folder-tree.models';
 import {
   findLocation,
   isAncestorOrSelf,
@@ -114,8 +114,8 @@ describe('removeNode', () => {
     const { forest, removed } = removeNode(makeForest(), 'file-2');
     expect(removed!.id).toBe('file-2');
     const nested = findLocation(forest, 'f-nested')!.node;
-    expect(isFolder(nested)).toBe(true);
-    if (isFolder(nested)) expect(nested.children.length).toBe(1);
+    expect(isFolderNode(nested)).toBe(true);
+    if (isFolderNode(nested)) expect(nested.children.length).toBe(1);
   });
 
   it('returns null removed for missing id', () => {
@@ -153,8 +153,8 @@ describe('insertNode', () => {
   it('inserts inside a folder', () => {
     const result = insertNode(makeForest(), newNode, 'f-nested');
     const nested = findLocation(result, 'f-nested')!.node;
-    expect(isFolder(nested)).toBe(true);
-    if (isFolder(nested)) {
+    expect(isFolderNode(nested)).toBe(true);
+    if (isFolderNode(nested)) {
       expect(nested.children.length).toBe(3);
       expect(nested.children[2].id).toBe('new-file');
     }
@@ -163,14 +163,14 @@ describe('insertNode', () => {
   it('inserts at specific index inside a folder', () => {
     const result = insertNode(makeForest(), newNode, 'f-nested', 0);
     const nested = findLocation(result, 'f-nested')!.node;
-    if (isFolder(nested)) expect(nested.children[0].id).toBe('new-file');
+    if (isFolderNode(nested)) expect(nested.children[0].id).toBe('new-file');
   });
 
   it('inserts into an empty folder', () => {
     const result = insertNode(makeForest(), newNode, 'f-empty');
     const empty = findLocation(result, 'f-empty')!.node;
-    expect(isFolder(empty)).toBe(true);
-    if (isFolder(empty)) {
+    expect(isFolderNode(empty)).toBe(true);
+    if (isFolderNode(empty)) {
       expect(empty.children.length).toBe(1);
       expect(empty.children[0].id).toBe('new-file');
     }
@@ -186,7 +186,7 @@ describe('insertNode', () => {
     const original = makeForest();
     insertNode(original, newNode, 'f-nested');
     const nested = findLocation(original, 'f-nested')!.node;
-    if (isFolder(nested)) expect(nested.children.length).toBe(2);
+    if (isFolderNode(nested)) expect(nested.children.length).toBe(2);
   });
 });
 
@@ -198,14 +198,14 @@ describe('renameFolder', () => {
   it('renames an existing folder', () => {
     const result = renameFolder(makeForest(), 'f-root', 'Renamed');
     const node = findLocation(result, 'f-root')!.node;
-    expect(isFolder(node)).toBe(true);
-    if (isFolder(node)) expect(node.name).toBe('Renamed');
+    expect(isFolderNode(node)).toBe(true);
+    if (isFolderNode(node)) expect(node.name).toBe('Renamed');
   });
 
   it('does not rename a file node', () => {
     const result = renameFolder(makeForest(), 'file-1', 'Oops');
     const node = findLocation(result, 'file-1')!.node;
-    expect(isFolder(node)).toBe(false);
+    expect(isFolderNode(node)).toBe(false);
   });
 
   it('returns same array when id is missing', () => {
@@ -219,7 +219,7 @@ describe('renameFolder', () => {
     const original = makeForest();
     renameFolder(original, 'f-root', 'Changed');
     const node = findLocation(original, 'f-root')!.node;
-    if (isFolder(node)) expect(node.name).toBe('Root Folder');
+    if (isFolderNode(node)) expect(node.name).toBe('Root Folder');
   });
 });
 
@@ -236,8 +236,8 @@ describe('addFolder', () => {
     const newNode = forest[0];
     expect(newNode.id).toBe(newId);
     expect(newNode.kind).toBe('folder');
-    expect(isFolder(newNode)).toBe(true);
-    if (isFolder(newNode)) {
+    expect(isFolderNode(newNode)).toBe(true);
+    if (isFolderNode(newNode)) {
       expect(newNode.name).toBe('New Folder');
       expect(newNode.children).toEqual([]);
     }
@@ -246,11 +246,11 @@ describe('addFolder', () => {
   it('adds a subfolder inside an existing folder', () => {
     const { forest, newId } = addFolder(makeForest(), 'f-root', 'Sub');
     const root = findLocation(forest, 'f-root')!.node;
-    expect(isFolder(root)).toBe(true);
-    if (isFolder(root)) {
+    expect(isFolderNode(root)).toBe(true);
+    if (isFolderNode(root)) {
       expect(root.children[0].id).toBe(newId);
       const sub = root.children[0];
-      if (isFolder(sub)) expect(sub.name).toBe('Sub');
+      if (isFolderNode(sub)) expect(sub.name).toBe('Sub');
     }
   });
 

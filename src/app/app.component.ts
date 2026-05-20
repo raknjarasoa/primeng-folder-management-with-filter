@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
-import { FolderTreeComponent, SessionNode, Layout } from 'layout-folder-management';
+import { FolderTreeComponent, SessionNode, LayoutInstance } from 'layout-folder-management';
 import { FolderApiService } from './services/folder-api.service';
 
 @Component({
@@ -25,7 +25,7 @@ export class AppComponent implements OnInit {
   private api = inject(FolderApiService);
 
   sessions1 = signal<SessionNode[]>([]);
-  layouts1 = signal<Layout[]>([]);
+  layouts1 = signal<LayoutInstance[]>([]);
   selectedFileId1 = signal<string | null>('v-003');
 
   ngOnInit() {

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, of, delay } from 'rxjs';
-import { SessionNode, Layout } from 'layout-folder-management';
+import { SessionNode, LayoutInstance } from 'layout-folder-management';
 
 @Injectable({ providedIn: 'root' })
 export class FolderApiService {
@@ -39,8 +39,8 @@ export class FolderApiService {
     return of(tree).pipe(delay(150));
   }
 
-  fetchLayouts1(): Observable<Layout[]> {
-    const layouts: Layout[] = [
+  fetchLayouts1(): Observable<LayoutInstance[]> {
+    const layouts: LayoutInstance[] = [
       { id: 'v-001', name: 'EUR/USD intraday', lastUpdated: '2026-04-29T08:12:00Z', lastViewDate: '2026-05-03T14:01:00Z' },
       { id: 'v-002', name: 'FX volatility surface', lastUpdated: '2026-04-22T10:30:00Z', lastViewDate: '2026-05-01T09:45:00Z' },
       { id: 'v-003', name: 'CAC 40 momentum', lastUpdated: '2026-05-02T16:00:00Z', lastViewDate: '2026-05-04T07:30:00Z' },
@@ -82,8 +82,8 @@ export class FolderApiService {
     return of(tree).pipe(delay(250));
   }
 
-  fetchLayouts2(): Observable<Layout[]> {
-    const layouts: Layout[] = [
+  fetchLayouts2(): Observable<LayoutInstance[]> {
+    const layouts: LayoutInstance[] = [
       { id: 'v-101', name: 'BTC/USDT Volume', lastUpdated: '2026-05-04T10:12:00Z', lastViewDate: '2026-05-04T10:15:00Z' },
       { id: 'v-102', name: 'ETH Gas Tracker', lastUpdated: '2026-05-04T11:30:00Z', lastViewDate: '2026-05-04T11:45:00Z' },
       { id: 'v-103', name: 'Uniswap Liquidity', lastUpdated: '2026-05-03T16:00:00Z', lastViewDate: '2026-05-04T09:30:00Z' },

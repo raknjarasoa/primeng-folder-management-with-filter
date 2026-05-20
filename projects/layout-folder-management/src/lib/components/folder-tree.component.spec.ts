@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { FolderTreeComponent } from './folder-tree.component';
-import { SessionNode, Layout, isFolder } from '../models/folder-tree.models';
+import { SessionNode, LayoutInstance, isFolderNode } from '../models/folder-tree.models';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -29,7 +29,7 @@ function makeSessions(): SessionNode[] {
   ];
 }
 
-function makeLayouts(): Layout[] {
+function makeLayouts(): LayoutInstance[] {
   return [
     { id: 'file-1', name: 'Alpha Report', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
     { id: 'file-2', name: 'Beta Dashboard', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
@@ -218,8 +218,8 @@ describe('FolderTreeComponent', () => {
 
     expect(component['editingId']()).toBeNull();
     const session = component.store.sessions()[0];
-    expect(isFolder(session)).toBe(true);
-    if (isFolder(session)) expect(session.name).toBe('New Name');
+    expect(isFolderNode(session)).toBe(true);
+    if (isFolderNode(session)) expect(session.name).toBe('New Name');
   });
 
   it('should not commit rename with empty name', async () => {
@@ -235,7 +235,7 @@ describe('FolderTreeComponent', () => {
 
     expect(component['editingId']()).toBe('f-root');
     const session = component.store.sessions()[0];
-    if (isFolder(session)) expect(session.name).toBe('Root Folder');
+    if (isFolderNode(session)) expect(session.name).toBe('Root Folder');
   });
 
   // -----------------------------------------------------------------------
@@ -282,14 +282,14 @@ describe('FolderTreeComponent', () => {
     fixture.detectChanges();
 
     const first = component.store.sessions()[0];
-    expect(isFolder(first)).toBe(true);
-    if (!isFolder(first)) return;
+    expect(isFolderNode(first)).toBe(true);
+    if (!isFolderNode(first)) return;
 
     const childrenBefore = first.children.length;
     component['onAddFolder']('f-root');
 
     const updated = component.store.sessions()[0];
-    if (isFolder(updated)) {
+    if (isFolderNode(updated)) {
       expect(updated.children.length).toBe(childrenBefore + 1);
     }
     expect(component['editingId']()).not.toBeNull();
