@@ -186,19 +186,40 @@
   }
 }
 
-// CDK drag preview (the floating clone that follows the cursor)
+// CDK drag preview (the floating clone that follows the cursor). CDK copies
+// the source row's computed width inline, which would otherwise stretch the
+// preview to the full row. `!important` is needed to override that inline
+// style; the cap then lets the label truncate with its existing ellipsis.
 ::ng-deep .cdk-drag-preview {
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: transparent;
+  border: none;
   border-radius: 6px;
   padding: 4px 10px;
+  // `padding-left` reapplied with !important to win over the row's inline
+  // `[style.padding-left.px]` (which encodes depth-based indentation — not
+  // meaningful in the floating preview).
+  padding-left: 10px !important;
   font-size: 13px;
   box-shadow: 0 6px 12px -3px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   gap: 6px;
+  width: max-content !important;
+  max-width: 300px;
 
-  // Hide the original row's hover-fade actions inside the preview
+  // The inner .file-content / .folder-content / .tree-row--selected rules
+  // would otherwise paint hover/selection backgrounds inside the preview.
+  .file-content,
+  .folder-content,
+  &.tree-row--selected .file-content {
+    background: transparent;
+  }
+
+  // Strip row chrome that isn't meaningful in the floating preview: the
+  // chevron / spacer at the start, the action buttons on the right, and any
+  // active drop-line indicators.
+  .chevron,
+  .chevron-spacer,
   .actions,
   .drop-line {
     display: none;
