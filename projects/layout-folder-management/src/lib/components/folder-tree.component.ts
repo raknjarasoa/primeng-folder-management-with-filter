@@ -97,6 +97,15 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
+  // Auto-scroll tuning while dragging. The trigger zone is the strip near
+  // each edge of the viewport that, when the pointer enters it, kicks off
+  // the rAF scroll loop. Speed ramps linearly from min (outer boundary) to
+  // max (right at the edge) so the user can throttle by hovering closer or
+  // further from the edge.
+  private readonly AUTO_SCROLL_ZONE_PX = 60;
+  private readonly AUTO_SCROLL_MIN_SPEED = 3;
+  private readonly AUTO_SCROLL_MAX_SPEED = 40;
+
   // ---------------------------------------------------------------------------
   // UI state
   // ---------------------------------------------------------------------------
@@ -196,6 +205,14 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
+
+  // Auto-scroll scratch — only meaningful between drag start and release.
+  // lastPointerY is the most recent viewport-relative Y; the rAF tick uses
+  // it to re-resolve the drop target after each scroll step (the pointer
+  // itself isn't moving, but the rows under it are).
+  private autoScrollRafId: number | null = null;
+  private autoScrollVelocity = 0;
+  private lastPointerY = 0;
 
   // ---------------------------------------------------------------------------
   // Lifecycle effects
@@ -301,13 +318,35 @@ export class FolderTreeComponent {
     if (!vp) return;
 
     const rect = vp.elementRef.nativeElement.getBoundingClientRect();
-    const scrollOffset = vp.measureScrollOffset();
-
     const pointerYInViewport = event.pointerPosition.y - rect.top;
     if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
       this.dropTarget.set(null);
+      this.setAutoScrollVelocity(0);
       return;
     }
+
+    this.lastPointerY = pointerYInViewport;
+    this.recomputeDropTargetAtPointerY(pointerYInViewport);
+
+    // Auto-scroll: speed ramps toward MAX as the pointer nears the edge.
+    const distFromTop = pointerYInViewport;
+    const distFromBottom = rect.height - pointerYInViewport;
+    let velocity = 0;
+    if (distFromTop < this.AUTO_SCROLL_ZONE_PX) {
+      velocity = -this.scrollSpeedFor(distFromTop);
+    } else if (distFromBottom < this.AUTO_SCROLL_ZONE_PX) {
+      velocity = this.scrollSpeedFor(distFromBottom);
+    }
+    this.setAutoScrollVelocity(velocity);
+  }
+
+  // Pulled out of onDragMoved so the rAF auto-scroll tick can re-resolve the
+  // drop target without a fresh CdkDragMove event (the pointer hasn't moved,
+  // but the rows under it have).
+  private recomputeDropTargetAtPointerY(pointerYInViewport: number): void {
+    const vp = this.viewport();
+    if (!vp) return;
+    const scrollOffset = vp.measureScrollOffset();
     const pointerY = pointerYInViewport + scrollOffset;
     const rowIndex = Math.floor(pointerY / this.ROW_HEIGHT);
     const offsetInRow = pointerY - rowIndex * this.ROW_HEIGHT;
@@ -339,7 +378,50 @@ export class FolderTreeComponent {
     }
   }
 
+  private scrollSpeedFor(distToEdge: number): number {
+    const clamped = Math.max(0, Math.min(this.AUTO_SCROLL_ZONE_PX, distToEdge));
+    // 0 at outer edge of zone → 1 right at the viewport edge.
+    const t = 1 - clamped / this.AUTO_SCROLL_ZONE_PX;
+    return (
+      this.AUTO_SCROLL_MIN_SPEED +
+      (this.AUTO_SCROLL_MAX_SPEED - this.AUTO_SCROLL_MIN_SPEED) * t
+    );
+  }
+
+  private setAutoScrollVelocity(v: number): void {
+    this.autoScrollVelocity = v;
+    if (v === 0) {
+      this.stopAutoScroll();
+    } else if (this.autoScrollRafId === null) {
+      this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
+    }
+  }
+
+  private autoScrollTick(): void {
+    this.autoScrollRafId = null;
+    const vp = this.viewport();
+    if (!vp || this.autoScrollVelocity === 0) return;
+
+    const currentOffset = vp.measureScrollOffset();
+    const nextOffset = Math.max(0, currentOffset + this.autoScrollVelocity);
+    vp.scrollToOffset(nextOffset, 'auto');
+
+    this.recomputeDropTargetAtPointerY(this.lastPointerY);
+
+    // Keep looping until onDragMoved or onDragReleased zeros the velocity.
+    this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
+  }
+
+  private stopAutoScroll(): void {
+    if (this.autoScrollRafId !== null) {
+      cancelAnimationFrame(this.autoScrollRafId);
+      this.autoScrollRafId = null;
+    }
+  }
+
   protected onDragReleased(_event: CdkDragRelease, _sourceRow: FlatRowData): void {
+    this.stopAutoScroll();
+    this.autoScrollVelocity = 0;
     const target = this.dropTarget();
     const sourceId = this.draggedRowId;
     this.dropTarget.set(null);
