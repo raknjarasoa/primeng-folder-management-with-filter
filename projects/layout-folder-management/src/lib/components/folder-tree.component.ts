@@ -518,6 +518,15 @@ export class FolderTreeComponent {
     this.creatingId.set(null);
   }
 
+  protected onRenameInputBlur(id: string): void {
+    const value = this.editingValue().trim();
+    if (value) {
+      this.commitRename(id);
+    } else {
+      this.cancelRename();
+    }
+  }
+
   protected onDelete(row: FlatRowData): void {
     if (this.editingId() === row.id) {
       this.editingId.set(null);

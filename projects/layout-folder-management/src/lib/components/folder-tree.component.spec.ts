@@ -233,6 +233,51 @@ describe('FolderTreeComponent', () => {
     if (isFolderNode(session)) expect(session.name).toBe('Root Folder');
   });
 
+  it('commits a rename on blur if a valid name is present', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['startRename']('f-root', 'Root Folder');
+    component['editingValue'].set('New Name via Blur');
+    component['onRenameInputBlur']('f-root');
+
+    expect(component['editingId']()).toBeNull();
+    const session = component.sessions()[0];
+    if (isFolderNode(session)) expect(session.name).toBe('New Name via Blur');
+  });
+
+  it('reverts/cancels the rename on blur if the name is empty for an existing folder', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['startRename']('f-root', 'Root Folder');
+    component['editingValue'].set('   ');
+    component['onRenameInputBlur']('f-root');
+
+    expect(component['editingId']()).toBeNull();
+    const session = component.sessions()[0];
+    if (isFolderNode(session)) expect(session.name).toBe('Root Folder'); // reverted/unchanged
+  });
+
+  it('cancels and deletes the folder on blur if the name is empty for a newly created folder', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    const beforeCount = component.sessions().length;
+    component['onAddFolder'](); // adds a folder and triggers rename mode
+
+    const targetId = component['editingId']()!;
+    component['editingValue'].set('   '); // empty name
+    component['onRenameInputBlur'](targetId);
+
+    expect(component['editingId']()).toBeNull();
+    expect(component['creatingId']()).toBeNull();
+    expect(component.sessions().length).toBe(beforeCount); // deleted
+  });
+
   // -----------------------------------------------------------------------
   // Add folder flow
   // -----------------------------------------------------------------------

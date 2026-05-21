@@ -94,12 +94,14 @@
           [(ngModel)]="editingValue"
           (keydown.enter)="commitRename(row.id)"
           (keydown.escape)="cancelRename()"
+          (blur)="onRenameInputBlur(row.id)"
           (click)="$event.stopPropagation()"
         />
         <button
           type="button"
           class="action-btn action-btn--confirm"
           title="Confirm"
+          [disabled]="!editingValue().trim()"
           (click)="commitRename(row.id); $event.stopPropagation()"
         >
           <i class="fas fa-check"></i>
