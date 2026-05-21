@@ -143,49 +143,6 @@
   }
 }
 
-.move-picker {
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-  max-height: 280px;
-  overflow-y: auto;
-  font-size: 13px;
-
-  &__option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: none;
-    border: none;
-    text-align: left;
-    padding: 6px 10px;
-    cursor: pointer;
-    color: #374151;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-
-    > i {
-      color: #6b7280;
-      width: 14px;
-    }
-
-    &:hover {
-      background: #f3f4f6;
-    }
-
-    &--root {
-      font-weight: 500;
-    }
-  }
-
-  &__divider {
-    height: 1px;
-    background: #e5e7eb;
-    margin: 4px 0;
-  }
-}
-
 // CDK drag preview (the floating clone that follows the cursor). CDK copies
 // the source row's computed width inline, which would otherwise stretch the
 // preview to the full row. `!important` is needed to override that inline

@@ -349,33 +349,20 @@ describe('FolderTreeComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Move-to picker
+  // Move-to picker integration
+  //
+  // The picker UI now lives in MoveFolderPickerComponent (covered by its own
+  // spec). What the parent owns is the post-emit handler — applying the move
+  // and auto-expanding the destination folder.
   // -----------------------------------------------------------------------
 
-  it('moveCandidates excludes the source row and its subtree', async () => {
+  it('onMoveConfirmed moves the source into the chosen folder and expands it', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    // Simulate opening the picker for f-root: candidates must NOT include
-    // f-root or f-nested.
-    component['movingRowId'].set('f-root');
-    await settle(fixture);
+    component['onMoveConfirmed']({ sourceId: 'file-top', targetFolderId: 'f-nested' });
 
-    const ids = component['moveCandidates']().map((c) => c.id);
-    expect(ids).not.toContain('f-root');
-    expect(ids).not.toContain('f-nested');
-  });
-
-  it('confirmMove moves the source into the chosen folder and expands it', async () => {
-    fixture.componentRef.setInput('sessions', makeSessions());
-    fixture.componentRef.setInput('layouts', makeLayouts());
-    await settle(fixture);
-
-    component['movingRowId'].set('file-top');
-    component['confirmMove']('f-nested');
-
-    // file-top should now live inside f-nested.
     const root = component.sessions()[0];
     expect(isFolderNode(root)).toBe(true);
     if (!isFolderNode(root)) return;
@@ -387,13 +374,12 @@ describe('FolderTreeComponent', () => {
     expect(component['expandedIds']().has('f-nested')).toBe(true);
   });
 
-  it('confirmMove with null target moves the source to root', async () => {
+  it('onMoveConfirmed with null target moves the source to root', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['movingRowId'].set('file-2');
-    component['confirmMove'](null);
+    component['onMoveConfirmed']({ sourceId: 'file-2', targetFolderId: null });
 
     expect(component.sessions().some((n) => n.id === 'file-2')).toBe(true);
   });

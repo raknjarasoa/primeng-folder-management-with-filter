@@ -176,30 +176,10 @@
     </div>
   }
 
-  <p-popover #movePicker (onHide)="onMovePickerHide()">
-    <div class="move-picker">
-      <button
-        type="button"
-        class="move-picker__option move-picker__option--root"
-        (click)="confirmMove(null)"
-      >
-        <i class="fas fa-house"></i>
-        Root
-      </button>
-      @if (moveCandidates().length > 0) {
-        <div class="move-picker__divider"></div>
-      }
-      @for (folder of moveCandidates(); track folder.id) {
-        <button
-          type="button"
-          class="move-picker__option"
-          [style.padding-left.px]="folder.depth * 12 + 10"
-          (click)="confirmMove(folder.id)"
-        >
-          <i class="fas fa-folder"></i>
-          {{ folder.label }}
-        </button>
-      }
-    </div>
-  </p-popover>
+  <app-move-folder-picker
+    #movePicker
+    [sessions]="sessions()"
+    (moveTo)="onMoveConfirmed($event)"
+  />
+
 </div>

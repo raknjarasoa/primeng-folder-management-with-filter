@@ -1,26 +1,22 @@
 import { LayoutInstance } from './layout-instance.model';
 
-export interface FolderNode {
+type FolderNode = {
   id: string;
   kind: 'folder';
   name: string;
   children: TreeItem[];
-}
+};
 
-export interface FileNode {
+type FileNode = {
   id: string;
   kind: 'file';
-}
+};
 
 export type TreeItem = FolderNode | FileNode;
 
-export function isFolderNode(node: TreeItem): node is FolderNode {
-  return node.kind === 'folder';
-}
-
 // A single visible row in the flattened tree consumed by cdk-virtual-scroll.
 // Produced by flattenSessions() in tree-helpers.
-export interface FlatRowData {
+export type FlatRowData = {
   id: string;
   kind: 'folder' | 'file';
   label: string;
@@ -29,4 +25,10 @@ export interface FlatRowData {
   hasChildren: boolean;
   layout?: LayoutInstance;
   isOther?: boolean;
+};
+
+export function isFolderNode(node: TreeItem): node is FolderNode {
+  return node.kind === 'folder';
 }
+
+

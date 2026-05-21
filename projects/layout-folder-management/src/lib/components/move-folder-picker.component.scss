@@ -1,0 +1,147 @@
+:host {
+  display: contents;
+}
+
+.move-picker {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  font-size: 13px;
+  color: #374151;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 4px;
+  }
+
+  &__title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    font-weight: 600;
+  }
+
+  &__source {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: #111827;
+    font-weight: 500;
+
+    > i {
+      color: #6b7280;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+  }
+
+  &__source-label {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__filter {
+    padding: 0 4px 6px;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    max-height: 280px;
+    overflow-y: auto;
+    gap: 1px;
+  }
+
+  &__option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 6px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #374151;
+    min-width: 0;
+    transition: background-color 80ms;
+
+    &:hover {
+      background: #eff6ff;
+      color: #1d4ed8;
+
+      .move-picker__icon {
+        color: #2563eb;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: -2px;
+    }
+
+    &--root {
+      font-weight: 500;
+
+      .move-picker__icon {
+        color: #2563eb;
+      }
+    }
+  }
+
+  &__icon {
+    color: #6b7280;
+    width: 14px;
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+
+  &__option-label {
+    min-width: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__hint {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 400;
+  }
+
+  // Vertical "tree guide" lines — one per depth level. Visually conveys
+  // folder hierarchy without relying solely on padding-left, which is hard
+  // to read past a few levels of nesting.
+  &__guide {
+    flex-shrink: 0;
+    width: 12px;
+    align-self: stretch;
+    border-left: 1px dashed #e5e7eb;
+    margin-right: -2px;
+  }
+
+  &__divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 4px 6px;
+  }
+
+  &__empty {
+    padding: 12px 10px;
+    font-size: 12px;
+    color: #6b7280;
+    text-align: center;
+    font-style: italic;
+  }
+}

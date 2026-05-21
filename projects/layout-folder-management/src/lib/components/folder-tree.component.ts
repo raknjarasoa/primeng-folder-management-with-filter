@@ -29,7 +29,6 @@ import { ButtonModule } from 'primeng/button';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
-import { Popover } from 'primeng/popover';
 import { TooltipModule } from 'primeng/tooltip';
 import { debounceTime } from 'rxjs/operators';
 
@@ -39,24 +38,29 @@ import {
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
 import {
-  FolderOption,
+  OrphanGroups,
   OTHERS_ROOT_ID,
   addFolder,
   collectAncestorIds,
+  collectSessionFileIds,
   collectSubtreeIds,
-  flattenFolders,
   flattenSessions,
+  groupOrphanLayouts,
   insertNode,
   isAncestorOrSelf,
   removeNode,
   renameFolder,
 } from '../store/tree-helpers';
+import {
+  MoveFolderPickerComponent,
+  MoveFolderRequest,
+} from './move-folder-picker.component';
 
 type DropZone = 'before' | 'into' | 'after';
-interface DropTarget {
+type DropTarget = {
   rowIndex: number;
   zone: DropZone;
-}
+};
 
 @Component({
   selector: 'app-folder-tree',
@@ -72,8 +76,8 @@ interface DropTarget {
     InputTextModule,
     IconFieldModule,
     InputIconModule,
-    Popover,
     TooltipModule,
+    MoveFolderPickerComponent,
   ],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
@@ -128,10 +132,6 @@ export class FolderTreeComponent {
   // Active drag-drop target indicator (rendered as a blue line / highlight).
   protected readonly dropTarget = signal<DropTarget | null>(null);
 
-  // Source row id while the "Move to…" picker is open. Drives the candidate
-  // list and is consumed on selection.
-  protected readonly movingRowId = signal<string | null>(null);
-
   // Tracks layout ids we've deleted locally so they don't reappear under
   // "Others" while the parent's `layouts` input still contains them. Resets
   // automatically when the parent emits a new layouts array.
@@ -173,27 +173,28 @@ export class FolderTreeComponent {
     return [];
   });
 
+  // Orphan-layout grouping is hoisted out of `flattenSessions` because it
+  // iterates every entry in `layoutsById`. Without this memo, every
+  // expand/collapse/filter/selection change would re-walk all layouts, which
+  // dominates the change-detection cost (profiled at ~12 ms for the perf
+  // dataset). Recomputes only when sessions or layouts change.
+  private readonly orphanGroups = computed<OrphanGroups>(() => {
+    const fileIds = collectSessionFileIds(this.sessions());
+    return groupOrphanLayouts(this.layoutsById(), fileIds);
+  });
+
   protected readonly flatRows = computed<FlatRowData[]>(() =>
     flattenSessions(
       this.sessions(),
       this.layoutsById(),
+      this.orphanGroups(),
       this.expandedIds(),
       this.debouncedFilterText().trim(),
     ),
   );
 
-  // Folders that are valid "Move to…" targets given the current movingRowId
-  // (the source's own subtree is excluded to prevent cycles). Empty when the
-  // picker is closed.
-  protected readonly moveCandidates = computed<FolderOption[]>(() => {
-    const sourceId = this.movingRowId();
-    if (!sourceId) return [];
-    const exclude = collectSubtreeIds(this.sessions(), sourceId);
-    return flattenFolders(this.sessions(), exclude);
-  });
-
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
-  private readonly movePicker = viewChild<Popover>('movePicker');
+  private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
@@ -538,15 +539,10 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected openMovePicker(row: FlatRowData, event: Event): void {
-    this.movingRowId.set(row.id);
-    this.movePicker()?.toggle(event);
+    this.movePicker()?.open(row, event);
   }
 
-  protected confirmMove(targetFolderId: string | null): void {
-    const sourceId = this.movingRowId();
-    this.movingRowId.set(null);
-    this.movePicker()?.hide();
-    if (!sourceId) return;
+  protected onMoveConfirmed({ sourceId, targetFolderId }: MoveFolderRequest): void {
     this.moveNode(sourceId, targetFolderId, 0);
     if (targetFolderId) {
       this.expandedIds.update((set) => {
@@ -556,10 +552,6 @@ export class FolderTreeComponent {
         return next;
       });
     }
-  }
-
-  protected onMovePickerHide(): void {
-    this.movingRowId.set(null);
   }
 
   // ---------------------------------------------------------------------------
