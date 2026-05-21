@@ -428,4 +428,48 @@ describe('FolderTreeComponent', () => {
 
     expect(component.sessions().some((n) => n.id === 'file-2')).toBe(true);
   });
+
+  // -----------------------------------------------------------------------
+  // Orphans / Other Users
+  // -----------------------------------------------------------------------
+
+  it('groups orphan layouts under "Other Users" and renders user folders', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    const orphanLayout: LayoutInstance = {
+      id: 'layout-orphan',
+      name: 'Orphan Layout',
+      editable: false,
+      username: 'John Doe',
+      description: '',
+      tooltip: '',
+    };
+    fixture.componentRef.setInput('layouts', [...makeLayouts(), orphanLayout]);
+
+    // Expand the virtual "Other Users" folder and the user folder
+    component['expandedIds'].update((set) => {
+      const next = new Set(set);
+      next.add('others-root');
+      next.add('others-John Doe');
+      return next;
+    });
+    await settle(fixture);
+
+    const rows = component['flatRows']();
+    const rootRow = findRow(rows, 'others-root');
+    const userRow = findRow(rows, 'others-John Doe');
+    const orphanRow = findRow(rows, 'layout-orphan');
+
+    expect(rootRow).toBeDefined();
+    expect(userRow).toBeDefined();
+    expect(orphanRow).toBeDefined();
+
+    expect(rootRow?.isOther).toBe(true);
+    expect(userRow?.isOther).toBe(true);
+    expect(orphanRow?.isOther).toBe(true);
+
+    // Verify row properties
+    expect(rootRow?.kind).toBe('folder');
+    expect(userRow?.kind).toBe('folder');
+    expect(orphanRow?.kind).toBe('file');
+  });
 });

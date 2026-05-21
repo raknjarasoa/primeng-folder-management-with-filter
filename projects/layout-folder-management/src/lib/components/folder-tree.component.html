@@ -108,7 +108,11 @@
         </button>
       } @else {
         <div class="folder-content">
-          <i class="fas fa-folder row-icon"></i>
+          <i
+            class="fas row-icon"
+            [class.fa-user]="row.isOther && row.id !== 'others-root'"
+            [class.fa-folder]="!row.isOther || row.id === 'others-root'"
+          ></i>
           <span
             class="label"
             (dblclick)="!row.isOther && startRename(row.id, row.label)"

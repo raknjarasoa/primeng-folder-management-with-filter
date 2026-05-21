@@ -424,16 +424,22 @@ export class FolderTreeComponent {
 
     const rows = this.flatRows();
     const { parentId, index } = this.resolveDropTarget(rows, target, sourceId);
-    this.moveNode(sourceId, parentId, index);
-    // Expand the new parent so the dropped item is visible
-    if (parentId) {
-      this.expandedIds.update((set) => {
-        if (set.has(parentId)) return set;
-        const next = new Set(set);
-        next.add(parentId);
-        return next;
-      });
-    }
+
+    // Defer the mutation to the next macro-task. This gives Angular CDK CdkDrag
+    // time to complete its release cleanup before the virtual scroll viewport
+    // re-renders and recycles DOM rows. Prevents severe visual/logical desyncs.
+    setTimeout(() => {
+      this.moveNode(sourceId, parentId, index);
+      // Expand the new parent so the dropped item is visible
+      if (parentId) {
+        this.expandedIds.update((set) => {
+          if (set.has(parentId)) return set;
+          const next = new Set(set);
+          next.add(parentId);
+          return next;
+        });
+      }
+    });
   }
 
   // Translates a (target row, zone) hit into the (parentId, insert index)
