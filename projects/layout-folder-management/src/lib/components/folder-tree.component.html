@@ -110,8 +110,8 @@
         <div class="folder-content">
           <i
             class="fas row-icon"
-            [class.fa-user]="row.isOther && row.id !== 'others-root'"
-            [class.fa-folder]="!row.isOther || row.id === 'others-root'"
+            [class.fa-user]="row.isOther && row.id !== OTHERS_ROOT_ID"
+            [class.fa-folder]="!row.isOther || row.id === OTHERS_ROOT_ID"
           ></i>
           <span
             class="label"

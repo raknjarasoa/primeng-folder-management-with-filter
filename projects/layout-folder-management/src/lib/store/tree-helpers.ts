@@ -17,15 +17,18 @@ export function findLocation(
   forest: TreeItem[],
   id: string,
 ): NodeLocation | null {
+  if (!forest || !id) return null;
   const stack: Array<{ siblings: TreeItem[]; parent: TreeItem | null }> = [
     { siblings: forest, parent: null },
   ];
   while (stack.length) {
     const { siblings, parent } = stack.pop()!;
+    if (!siblings) continue;
     for (let i = 0; i < siblings.length; i++) {
       const node = siblings[i];
+      if (!node) continue;
       if (node.id === id) return { node, parent, index: i, siblings };
-      if (isFolderNode(node) && node.children.length) {
+      if (isFolderNode(node) && Array.isArray(node.children) && node.children.length) {
         stack.push({ siblings: node.children, parent: node });
       }
     }
@@ -38,9 +41,10 @@ export function isAncestorOrSelf(
   ancestorId: string,
   descendantId: string,
 ): boolean {
+  if (!forest || !ancestorId || !descendantId) return false;
   if (ancestorId === descendantId) return true;
   const loc = findLocation(forest, ancestorId);
-  if (!loc || !isFolderNode(loc.node)) return false;
+  if (!loc || !isFolderNode(loc.node) || !Array.isArray(loc.node.children)) return false;
   return findLocation(loc.node.children, descendantId) !== null;
 }
 
@@ -49,17 +53,20 @@ export function removeNode(
   id: string,
 ): { forest: TreeItem[]; removed: TreeItem | null } {
   let removed: TreeItem | null = null;
+  if (!forest || !id) return { forest: [], removed: null };
 
   function remove(nodes: TreeItem[]): TreeItem[] {
+    if (!nodes) return [];
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
+      if (!node) continue;
       if (node.id === id) {
         removed = node;
         const newNodes = [...nodes];
         newNodes.splice(i, 1);
         return newNodes;
       }
-      if (isFolderNode(node) && node.children) {
+      if (isFolderNode(node) && Array.isArray(node.children)) {
         const newChildren = remove(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -81,6 +88,7 @@ export function insertNode(
   targetFolderId: string | null,
   index?: number,
 ): TreeItem[] {
+  if (!forest || !nodeToInsert) return forest || [];
   if (targetFolderId === null) {
     const newForest = [...forest];
     newForest.splice(index ?? newForest.length, 0, nodeToInsert);
@@ -88,16 +96,18 @@ export function insertNode(
   }
 
   function insert(nodes: TreeItem[]): TreeItem[] {
+    if (!nodes) return [];
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
+      if (!node) continue;
       if (node.id === targetFolderId && isFolderNode(node)) {
         const newNodes = [...nodes];
-        const newChildren = [...node.children];
+        const newChildren = Array.isArray(node.children) ? [...node.children] : [];
         newChildren.splice(index ?? newChildren.length, 0, nodeToInsert);
         newNodes[i] = { ...node, children: newChildren };
         return newNodes;
       }
-      if (isFolderNode(node) && node.children) {
+      if (isFolderNode(node) && Array.isArray(node.children)) {
         const newChildren = insert(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -121,15 +131,18 @@ export function renameFolder(
   id: string,
   newName: string,
 ): TreeItem[] {
+  if (!forest || !id) return forest || [];
   function rename(nodes: TreeItem[]): TreeItem[] {
+    if (!nodes) return [];
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
+      if (!node) continue;
       if (node.id === id && isFolderNode(node)) {
         const newNodes = [...nodes];
         newNodes[i] = { ...node, name: newName };
         return newNodes;
       }
-      if (isFolderNode(node) && node.children) {
+      if (isFolderNode(node) && Array.isArray(node.children)) {
         const newChildren = rename(node.children);
         if (newChildren !== node.children) {
           const newNodes = [...nodes];
@@ -141,8 +154,7 @@ export function renameFolder(
     return nodes;
   }
 
-  const newForest = rename(forest);
-  return newForest;
+  return rename(forest);
 }
 
 export function addFolder(
@@ -160,15 +172,18 @@ export function collectAncestorIds(
   forest: TreeItem[],
   targetId: string,
 ): string[] | null {
+  if (!forest || !targetId) return null;
   const path: string[] = [];
-  const found = walkPath(forest, targetId, path)
+  const found = walkPath(forest, targetId, path);
   return found ? path : null;
 }
 
 function walkPath(nodes: TreeItem[], targetId: string, path: string[]): boolean {
+  if (!nodes) return false;
   for (const node of nodes) {
+    if (!node) continue;
     if (node.id === targetId) return true;
-    if (isFolderNode(node) && node.children.length) {
+    if (isFolderNode(node) && Array.isArray(node.children) && node.children.length) {
       path.push(node.id);
       if (walkPath(node.children, targetId, path)) return true;
       path.pop();
@@ -177,25 +192,27 @@ function walkPath(nodes: TreeItem[], targetId: string, path: string[]): boolean 
   return false;
 }
 
-// Collects the IDs of all nodes inside `rootId`'s subtree (including rootId
-// itself). Used during drag to disallow dropping a folder into its own
-// descendants in O(1) lookups rather than an O(N) tree walk per move event.
 export function collectSubtreeIds(
   forest: TreeItem[],
   rootId: string,
 ): Set<string> {
   const out = new Set<string>();
+  if (!forest || !rootId) return out;
   const loc = findLocation(forest, rootId);
   if (!loc) return out;
   out.add(rootId);
-  if (isFolderNode(loc.node)) collectAllIds(loc.node.children, out);
+  if (isFolderNode(loc.node) && Array.isArray(loc.node.children)) {
+    collectAllIds(loc.node.children, out);
+  }
   return out;
 }
 
 function collectAllIds(nodes: TreeItem[], out: Set<string>): void {
+  if (!nodes) return;
   for (const n of nodes) {
+    if (!n) continue;
     out.add(n.id);
-    if (isFolderNode(n)) collectAllIds(n.children, out);
+    if (isFolderNode(n) && Array.isArray(n.children)) collectAllIds(n.children, out);
   }
 }
 
@@ -205,55 +222,45 @@ export type FolderOption = {
   depth: number;
 };
 
-// Walks the session forest and returns every folder as a flat list (id +
-// label + depth), skipping anything whose id is in `excludeIds`. Used by the
-// "Move to…" picker to present valid move targets; the source row's own
-// subtree is excluded to prevent cycles.
 export function flattenFolders(
   forest: TreeItem[],
   excludeIds: ReadonlySet<string>,
 ): FolderOption[] {
   const result: FolderOption[] = [];
+  if (!forest) return result;
   const walk = (nodes: TreeItem[], depth: number): void => {
+    if (!nodes) return;
     for (const node of nodes) {
-      if (!isFolderNode(node) || excludeIds.has(node.id)) continue;
-      result.push({ id: node.id, label: node.name, depth });
-      walk(node.children, depth + 1);
+      if (!node) continue;
+      if (!isFolderNode(node) || (excludeIds && excludeIds.has(node.id))) continue;
+      result.push({ id: node.id, label: node.name || 'Unnamed Folder', depth });
+      if (Array.isArray(node.children)) walk(node.children, depth + 1);
     }
   };
   walk(forest, 0);
   return result;
 }
 
-// Flattens the session tree (+ orphan-layouts "Others" subtree) into the
-// single list cdk-virtual-scroll consumes. When `filter` is non-empty, only
-// nodes whose label/metadata match, plus their ancestors, are emitted, and
-// matching subtrees are force-expanded so matches are visible.
-//
-// The orphan-grouping step (which iterates *every* layout) is intentionally
-// NOT done here — pass it in precomputed via `orphanGroups`. The caller is
-// expected to wrap this in a memoised computed signal so we don't re-iterate
-// the entire `layoutsById` set on every expand/collapse or filter change.
-export const OTHERS_ROOT_ID = 'others-root';
-export const OTHERS_USER_PREFIX = 'others-';
+export const OTHERS_ROOT_ID = 'virtual-others-root';
+export const OTHERS_USER_PREFIX = 'virtual-user-';
 
 export type OrphanGroups = {
   othersByUsername: Record<string, LayoutInstance[]>;
   othersUsernames: string[];
 };
 
-// Walks every layout once, bucketing those not present in `sessionFileIds`
-// under their username. Hot for large `layoutsById` — must only re-run when
-// `sessions` or `layoutsById` change, never on expand/filter/selection.
 export function groupOrphanLayouts(
   layoutsById: Record<string, LayoutInstance>,
   sessionFileIds: ReadonlySet<string>,
 ): OrphanGroups {
   const othersByUsername: Record<string, LayoutInstance[]> = {};
-  for (const layout of Object.values(layoutsById)) {
-    if (sessionFileIds.has(layout.id)) continue;
-    const uname = layout.username || 'Unknown User';
-    (othersByUsername[uname] ??= []).push(layout);
+  if (layoutsById) {
+    for (const layout of Object.values(layoutsById)) {
+      if (!layout || !layout.id) continue;
+      if (sessionFileIds && sessionFileIds.has(layout.id)) continue;
+      const uname = layout.username || 'Unknown User';
+      (othersByUsername[uname] ??= []).push(layout);
+    }
   }
   return {
     othersByUsername,
@@ -270,44 +277,41 @@ export function flattenSessions(
 ): FlatRowData[] {
   const query = filter.trim().toLowerCase();
   const result: FlatRowData[] = [];
-  const { othersByUsername, othersUsernames } = orphanGroups;
+  const { othersByUsername, othersUsernames } = orphanGroups || { othersByUsername: {}, othersUsernames: [] };
 
-  // Build the include set when filtering. A node is included if it (or any
-  // descendant) matches the query.
   let includeSet: Set<string> | null = null;
   if (query) {
     includeSet = new Set<string>();
-    buildIncludeSet(sessions, layoutsById, query, includeSet);
-    buildOthersIncludeSet(othersByUsername, query, includeSet);
+    buildIncludeSet(sessions || [], layoutsById || {}, query, includeSet);
+    buildOthersIncludeSet(othersByUsername || {}, query, includeSet);
   }
 
   const isExpanded = (id: string): boolean =>
-    includeSet !== null ? includeSet.has(id) : expandedIds.has(id);
+    includeSet !== null ? includeSet.has(id) : (expandedIds && expandedIds.has(id));
 
-  // Walk the real sessions.
   const walk = (nodes: TreeItem[], depth: number): void => {
+    if (!nodes) return;
     for (const node of nodes) {
+      if (!node) continue;
       if (includeSet && !includeSet.has(node.id)) continue;
       if (isFolderNode(node)) {
         const expanded = isExpanded(node.id);
         result.push({
           id: node.id,
           kind: 'folder',
-          label: node.name,
+          label: node.name || 'Unnamed Folder',
           depth,
           expanded,
-          hasChildren: node.children.length > 0,
+          hasChildren: Array.isArray(node.children) && node.children.length > 0,
         });
-        if (expanded) walk(node.children, depth + 1);
+        if (expanded && Array.isArray(node.children)) walk(node.children, depth + 1);
       } else {
-        // File node with no matching layout: skip it entirely rather than
-        // render a placeholder row.
-        const layout = layoutsById[node.id];
+        const layout = layoutsById ? layoutsById[node.id] : undefined;
         if (!layout) continue;
         result.push({
           id: node.id,
           kind: 'file',
-          label: layout.name,
+          label: layout.name || 'Unnamed Layout',
           depth,
           expanded: false,
           hasChildren: false,
@@ -316,11 +320,10 @@ export function flattenSessions(
       }
     }
   };
-  walk(sessions, 0);
+  walk(sessions || [], 0);
 
-  // Append "Others" virtual subtree, if any orphans exist and (when filtering)
-  // anything inside matches.
   const othersIncluded =
+    Array.isArray(othersUsernames) &&
     othersUsernames.length > 0 &&
     (!includeSet || includeSet.has(OTHERS_ROOT_ID));
   if (othersIncluded) {
@@ -348,13 +351,14 @@ export function flattenSessions(
           hasChildren: true,
           isOther: true,
         });
-        if (userExpanded) {
+        if (userExpanded && othersByUsername[uname]) {
           for (const layout of othersByUsername[uname]) {
+            if (!layout) continue;
             if (includeSet && !includeSet.has(layout.id)) continue;
             result.push({
               id: layout.id,
               kind: 'file',
-              label: layout.name,
+              label: layout.name || 'Unnamed Layout',
               depth: 2,
               expanded: false,
               hasChildren: false,
@@ -370,15 +374,14 @@ export function flattenSessions(
   return result;
 }
 
-// Walks the session tree once and returns the set of file ids present in it.
-// Lifted out of flattenSessions so the result can be memoised independently
-// of `expandedIds` / `filter`.
 export function collectSessionFileIds(sessions: TreeItem[]): Set<string> {
   const ids = new Set<string>();
   const walk = (nodes: TreeItem[]): void => {
+    if (!nodes) return;
     for (const n of nodes) {
-      if (isFolderNode(n)) walk(n.children);
-      else ids.add(n.id);
+      if (!n) continue;
+      if (isFolderNode(n) && Array.isArray(n.children)) walk(n.children);
+      else if (n.id) ids.add(n.id);
     }
   };
   walk(sessions);
@@ -391,15 +394,17 @@ function buildIncludeSet(
   query: string,
   out: Set<string>,
 ): boolean {
+  if (!nodes) return false;
   let anyMatched = false;
   for (const node of nodes) {
+    if (!node) continue;
     let matched = false;
-    if (isFolderNode(node)) {
-      const labelMatch = node.name.toLowerCase().includes(query);
+    if (isFolderNode(node) && Array.isArray(node.children)) {
+      const labelMatch = (node.name || '').toLowerCase().includes(query);
       const childMatch = buildIncludeSet(node.children, layoutsById, query, out);
       matched = labelMatch || childMatch;
     } else {
-      const layout = layoutsById[node.id];
+      const layout = layoutsById ? layoutsById[node.id] : undefined;
       matched = matchesLayout(layout, query);
     }
     if (matched) {
@@ -415,14 +420,18 @@ function buildOthersIncludeSet(
   query: string,
   out: Set<string>,
 ): void {
+  if (!othersByUsername) return;
   let anyMatched = false;
   for (const uname of Object.keys(othersByUsername)) {
     const userId = OTHERS_USER_PREFIX + uname;
     let userHas = uname.toLowerCase().includes(query);
-    for (const layout of othersByUsername[uname]) {
-      if (matchesLayout(layout, query)) {
-        out.add(layout.id);
-        userHas = true;
+    const list = othersByUsername[uname];
+    if (Array.isArray(list)) {
+      for (const layout of list) {
+        if (matchesLayout(layout, query)) {
+          out.add(layout.id);
+          userHas = true;
+        }
       }
     }
     if (userHas) {
@@ -435,8 +444,8 @@ function buildOthersIncludeSet(
 
 function matchesLayout(layout: LayoutInstance | undefined, query: string): boolean {
   if (!layout) return false;
-  if (layout.name.toLowerCase().includes(query)) return true;
-  if (layout.username?.toLowerCase().includes(query)) return true;
-  if (layout.description?.toLowerCase().includes(query)) return true;
+  if ((layout.name || '').toLowerCase().includes(query)) return true;
+  if ((layout.username || '').toLowerCase().includes(query)) return true;
+  if ((layout.description || '').toLowerCase().includes(query)) return true;
   return false;
 }

@@ -28,7 +28,7 @@ export type FlatRowData = {
 };
 
 export function isFolderNode(node: TreeItem): node is FolderNode {
-  return node.kind === 'folder';
+  return !!(node && node.kind === 'folder');
 }
 
 

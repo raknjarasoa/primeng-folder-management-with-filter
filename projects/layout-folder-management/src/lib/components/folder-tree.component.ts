@@ -81,6 +81,8 @@ export class FolderTreeComponent {
   layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
 
+  protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
+
   // Fires on every file-row click, including re-clicks of the currently
   // selected file (where `selectedFileId` would not emit because the value
   // didn't change).
@@ -135,10 +137,17 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   private readonly layoutsById = computed<Record<string, LayoutInstance>>(() => {
-    const suppressed = this.suppressedLayoutIds();
+    const suppressed = this.suppressedLayoutIds() || new Set<string>();
     const out: Record<string, LayoutInstance> = {};
-    for (const l of this.layouts()) {
-      if (!suppressed.has(l.id)) out[l.id] = l;
+    const layoutsList = this.layouts() || [];
+    for (const l of layoutsList) {
+      if (l && l.id) {
+        if (out[l.id]) {
+          console.warn(`[FolderTreeComponent] Duplicate layout ID detected: "${l.id}". The first instance will be used.`);
+          continue;
+        }
+        if (!suppressed.has(l.id)) out[l.id] = l;
+      }
     }
     return out;
   });
@@ -151,7 +160,8 @@ export class FolderTreeComponent {
     const fileId = this.selectedFileId();
     if (!fileId) return [];
 
-    const sessionPath = collectAncestorIds(this.sessions(), fileId);
+    const sessionsList = this.sessions() || [];
+    const sessionPath = collectAncestorIds(sessionsList, fileId);
     if (sessionPath !== null) return sessionPath;
 
     const layout = this.layoutsById()[fileId];
@@ -169,19 +179,35 @@ export class FolderTreeComponent {
   // dominates the change-detection cost (profiled at ~12 ms for the perf
   // dataset). Recomputes only when sessions or layouts change.
   private readonly orphanGroups = computed<OrphanGroups>(() => {
-    const fileIds = collectSessionFileIds(this.sessions());
+    const sessionsList = this.sessions() || [];
+    const fileIds = collectSessionFileIds(sessionsList);
     return groupOrphanLayouts(this.layoutsById(), fileIds);
   });
 
-  protected readonly flatRows = computed<FlatRowData[]>(() =>
-    flattenSessions(
-      this.sessions(),
+  protected readonly flatRows = computed<FlatRowData[]>(() => {
+    const rows = flattenSessions(
+      this.sessions() || [],
       this.layoutsById(),
       this.orphanGroups(),
-      this.expandedIds(),
-      this.debouncedFilterText().trim(),
-    ),
-  );
+      this.expandedIds() || new Set<string>(),
+      (this.debouncedFilterText() || '').trim(),
+    );
+
+    // Filter out any duplicate row IDs to prevent Angular CDK Virtual Scroll crashes
+    const seenKeys = new Set<string>();
+    const uniqueRows: FlatRowData[] = [];
+    for (const r of rows) {
+      if (!r || !r.id) continue;
+      const trackKey = `${r.kind}-${r.id}`;
+      if (seenKeys.has(trackKey)) {
+        console.warn(`[FolderTreeComponent] Duplicate rendering key detected: "${trackKey}". This row will be ignored to prevent Angular CDK Virtual Scroll crashes.`);
+        continue;
+      }
+      seenKeys.add(trackKey);
+      uniqueRows.push(r);
+    }
+    return uniqueRows;
+  });
 
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
@@ -273,7 +299,9 @@ export class FolderTreeComponent {
     });
   }
 
-  protected trackRowId = (_: number, row: FlatRowData): string => row.id;
+  protected trackRowId = (index: number, row: FlatRowData): string => {
+    return row && row.id ? `${row.kind}-${row.id}` : `index-${index}`;
+  };
 
   // ---------------------------------------------------------------------------
   // Drag and drop — custom hit detection compatible with virtual scroll
@@ -289,7 +317,7 @@ export class FolderTreeComponent {
     // Precompute the set of IDs we can't drop into (self + descendants). The
     // drag handler fires on every pointer move, so this avoids walking the
     // tree 60×/second.
-    this.dragForbiddenIds = collectSubtreeIds(this.sessions(), sourceRow.id);
+    this.dragForbiddenIds = collectSubtreeIds(this.sessions() || [], sourceRow.id);
     // Collapse the source folder during drag so its descendants aren't visible
     // (visually noisy and they're invalid drop targets anyway).
     if (sourceRow.kind === 'folder' && this.expandedIds().has(sourceRow.id)) {
@@ -487,7 +515,7 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected onAddFolder(parentId: string | null = null): void {
-    const { forest, newId } = addFolder(this.sessions(), parentId, '');
+    const { forest, newId } = addFolder(this.sessions() || [], parentId, '');
     this.sessions.set(forest);
     if (parentId) {
       this.expandedIds.update((set) => {
@@ -510,7 +538,7 @@ export class FolderTreeComponent {
     const value = this.editingValue().trim();
     if (this.editingId() !== id || !value) return;
 
-    this.sessions.set(renameFolder(this.sessions(), id, value));
+    this.sessions.set(renameFolder(this.sessions() || [], id, value));
     this.editingId.set(null);
     this.creatingId.set(null);
   }
@@ -566,7 +594,7 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   private moveNode(draggedId: string, targetFolderId: string | null, index?: number): void {
-    const current = this.sessions();
+    const current = this.sessions() || [];
     // Reject drops that would create a cycle. The drag UI already filters
     // these, but we guard here too against programmatic misuse.
     if (targetFolderId !== null && isAncestorOrSelf(current, draggedId, targetFolderId)) return;
@@ -576,7 +604,7 @@ export class FolderTreeComponent {
   }
 
   private deleteNode(id: string): void {
-    const { forest } = removeNode(this.sessions(), id);
+    const { forest } = removeNode(this.sessions() || [], id);
     this.sessions.set(forest);
     // Suppress the layout (if any) so it doesn't migrate to "Others" while
     // the parent's input still contains it. Harmless for folder ids — they
