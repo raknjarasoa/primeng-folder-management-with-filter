@@ -1,3 +1,4 @@
+import { Guid } from 'guid-typescript'
 import {
   FlatRowData,
   TreeItem,
@@ -149,9 +150,10 @@ export function addFolder(
   parentFolderId: string | null,
   name: string,
 ): { forest: TreeItem[]; newId: string } {
-  const newId = `f-${Date.now().toString(36)}`;
+  const newId = `folder-${Guid.create().toString()}`;
   const folder: TreeItem = { id: newId, kind: 'folder', name, children: [] };
-  return { forest: insertNode(forest, folder, parentFolderId, 0), newId };
+  const newForest = insertNode(forest, folder, parentFolderId, 0);
+  return { forest: newForest, newId };
 }
 
 export function collectAncestorIds(
@@ -159,7 +161,8 @@ export function collectAncestorIds(
   targetId: string,
 ): string[] | null {
   const path: string[] = [];
-  return walkPath(forest, targetId, path) ? path : null;
+  const found = walkPath(forest, targetId, path)
+  return found ? path : null;
 }
 
 function walkPath(nodes: TreeItem[], targetId: string, path: string[]): boolean {

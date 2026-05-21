@@ -6,6 +6,7 @@ import {
   CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
+import { TooltipModule } from 'primeng/tooltip';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -68,15 +69,13 @@ type DropTarget = {
     CdkDropList,
     AutoFocus,
     MoveFolderPickerComponent,
+    TooltipModule,
   ],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
 })
 export class FolderTreeComponent {
-  // ---------------------------------------------------------------------------
-  // Inputs / outputs
-  // ---------------------------------------------------------------------------
-
+  readonlyInstance = input(false);
   sessions = model.required<TreeItem[]>();
   layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
@@ -104,14 +103,14 @@ export class FolderTreeComponent {
   // UI state
   // ---------------------------------------------------------------------------
 
-  protected readonly expandedIds = signal<ReadonlySet<string>>(new Set());
 
+  protected readonly filterText = signal<string>('');
   protected readonly editingId = signal<string | null>(null);
   protected readonly editingValue = signal<string>('');
   protected readonly creatingId = signal<string | null>(null);
+  protected readonly expandedIds = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly filterText = signal<string>('');
-  protected readonly debouncedFilterText = toSignal(
+  protected readonly debouncedFilterText = toSignal<string, string>(
     toObservable(this.filterText).pipe(debounceTime(300)),
     { initialValue: '' },
   );

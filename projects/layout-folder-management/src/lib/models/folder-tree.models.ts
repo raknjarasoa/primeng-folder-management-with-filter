@@ -1,15 +1,15 @@
 import { LayoutInstance } from './layout-instance.model';
 
 type FolderNode = {
-  id: string;
   kind: 'folder';
+  id: string;
   name: string;
   children: TreeItem[];
 };
 
 type FileNode = {
-  id: string;
   kind: 'file';
+  id: string;
 };
 
 export type TreeItem = FolderNode | FileNode;
