@@ -25,11 +25,6 @@ import {
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
-import { ButtonModule } from 'primeng/button';
-import { IconFieldModule } from 'primeng/iconfield';
-import { InputIconModule } from 'primeng/inputicon';
-import { InputTextModule } from 'primeng/inputtext';
-import { TooltipModule } from 'primeng/tooltip';
 import { debounceTime } from 'rxjs/operators';
 
 import {
@@ -72,11 +67,6 @@ type DropTarget = {
     CdkDrag,
     CdkDropList,
     AutoFocus,
-    ButtonModule,
-    InputTextModule,
-    IconFieldModule,
-    InputIconModule,
-    TooltipModule,
     MoveFolderPickerComponent,
   ],
   templateUrl: './folder-tree.component.html',

@@ -2,34 +2,138 @@
   display: block;
 }
 
+.tree-container {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #ffffff;
+  color: #111827;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  height: 36px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: #6b7280;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 32px;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  outline: none;
+
+  &:focus {
+    border-color: #111827;
+  }
+}
+
+.clear-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: #111827;
+  }
+}
+
+.new-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #111827;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* Tree Viewport */
 .tree-viewport {
   height: 320px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  background: #ffffff;
   contain: strict;
 }
 
+/* Tree Row */
 .tree-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 28px;
-  padding-right: 4px;
+  padding-right: 8px;
   font-size: 13px;
   cursor: default;
   position: relative;
   user-select: none;
-  border-radius: 3px;
-  transition: background-color 80ms;
-  overflow: hidden;
+  background: #ffffff;
 
-  // Drag-into highlight stays row-wide — it's about the drop target, not
-  // the file's content box.
+  &:hover {
+    background: #f3f4f6;
+  }
+
+  &.tree-row--selected {
+    background: #eff6ff;
+    border-top: 1px solid #3b82f6;
+    border-bottom: 1px solid #3b82f6;
+    color: #1e3a8a;
+  }
+
   &.tree-row--target-into {
-    background: rgba(59, 130, 246, 0.15);
-    outline: 1px solid #3b82f6;
+    background: #eff6ff;
+    outline: 2px solid #2563eb;
     outline-offset: -2px;
+    z-index: 2;
   }
 
   &.tree-row--other {
@@ -37,23 +141,17 @@
   }
 }
 
-// Folder rows keep the full-row hover so the action buttons on the right
-// stay visually grouped with the row they belong to.
-.tree-row:not(:has(.file-content)):hover {
-  background: #f3f4f6;
-}
-
-.chevron,
+.chevron-btn,
 .chevron-spacer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
-.chevron {
+.chevron-btn {
   background: none;
   border: none;
   padding: 0;
@@ -65,8 +163,16 @@
   }
 }
 
+.row-icon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-size: 13px;
+}
+
 .label {
   min-width: 0;
+  flex: 1;
   height: 22px;
   line-height: 22px;
   white-space: nowrap;
@@ -74,54 +180,68 @@
   text-overflow: ellipsis;
 }
 
-// Pin the inline rename input to the exact same box as `.label`, so toggling
-// a folder between display and edit modes doesn't visually shift the row.
-// pInputText's default padding/min-height would otherwise grow the box.
-.tree-row input.p-inputtext {
-  height: 22px;
-  line-height: 1;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-// Icon + label wrapper used by both file and folder display rows. The second
-// track sizes to `max-content` so the box hugs the label when short; combined
-// with `min-width: 0` and the label's `text-overflow: ellipsis` it truncates
-// when the row would otherwise overflow. The hit area for click / dblclick is
-// limited to this box, not the empty space beside it.
-.file-content,
-.folder-content {
-  display: grid;
-  grid-template-columns: 13px minmax(0, max-content);
-  gap: 6px;
-  align-items: center;
+.rename-input {
+  flex: 1;
   min-width: 0;
-  border-radius: 3px;
-  transition: background-color 80ms;
-}
-
-.file-content {
-  cursor: pointer;
-
-  &:hover {
-    background: #f3f4f6;
-  }
-}
-
-.tree-row--selected .file-content {
-  background: #dbeafe;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid #111827;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  outline: none;
 }
 
 .actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
   margin-left: auto;
   opacity: 0;
-  transition: opacity 80ms;
 
   .tree-row:hover & {
     opacity: 1;
+  }
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+
+  &:hover:not(:disabled) {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &--confirm {
+    color: #16a34a;
+    border: 1px solid #16a34a;
+    background: #ffffff;
+
+    &:hover:not(:disabled) {
+      background: #f0fdf4;
+      color: #15803d;
+    }
+  }
+
+  &--danger {
+    &:hover:not(:disabled) {
+      background: #fee2e2;
+      color: #dc2626;
+    }
   }
 }
 
@@ -130,9 +250,9 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: #3b82f6;
+  background: #2563eb;
   pointer-events: none;
-  z-index: 1;
+  z-index: 10;
 
   &--before {
     top: 0;
@@ -143,47 +263,39 @@
   }
 }
 
-// CDK drag preview (the floating clone that follows the cursor). CDK copies
-// the source row's computed width inline, which would otherwise stretch the
-// preview to the full row. `!important` is needed to override that inline
-// style; the cap then lets the label truncate with its existing ellipsis.
-::ng-deep .cdk-drag-preview {
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 10px;
-  // `padding-left` reapplied with !important to win over the row's inline
-  // `[style.padding-left.px]` (which encodes depth-based indentation — not
-  // meaningful in the floating preview).
-  padding-left: 10px !important;
+.empty-state {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed #9ca3af;
+  border-radius: 4px;
+  background: #f9fafb;
   font-size: 13px;
-  box-shadow: 0 6px 12px -3px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  color: #6b7280;
+}
+
+/* CDK drag preview */
+::ng-deep .cdk-drag-preview {
+  background: #ffffff !important;
+  border: 1px solid #111827 !important;
+  padding: 4px 8px !important;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
   width: max-content !important;
-  max-width: 300px;
+  max-width: 300px !important;
+  font-size: 13px !important;
 
-  // The inner .file-content / .folder-content / .tree-row--selected rules
-  // would otherwise paint hover/selection backgrounds inside the preview.
-  .file-content,
-  .folder-content,
-  &.tree-row--selected .file-content {
-    background: transparent;
-  }
-
-  // Strip row chrome that isn't meaningful in the floating preview: the
-  // chevron / spacer at the start, the action buttons on the right, and any
-  // active drop-line indicators.
-  .chevron,
+  .chevron-btn,
   .chevron-spacer,
   .actions,
   .drop-line {
-    display: none;
+    display: none !important;
   }
 }
 
-// The source row stays in place during drag; CDK clones it into a preview.
 .cdk-drag-placeholder {
-  opacity: 0.4;
+  border: 1px dashed #9ca3af !important;
+  background: #f9fafb !important;
+  opacity: 0.5 !important;
 }
