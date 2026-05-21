@@ -237,10 +237,12 @@ export class FolderTreeComponent {
     // resize observation, so we attach one here that calls checkViewportSize
     // on every resize. Initial measurement runs once via afterNextRender.
     const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => this.stopAutoScroll());
     afterNextRender(() => {
       const vp = this.viewport();
       if (!vp) return;
       vp.checkViewportSize();
+      if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver(() => vp.checkViewportSize());
       observer.observe(vp.elementRef.nativeElement);
       destroyRef.onDestroy(() => observer.disconnect());

@@ -3,8 +3,6 @@
 }
 
 .tree-container {
-  max-width: 400px;
-  margin: 0 auto;
   padding: 16px;
   background: #ffffff;
   color: #111827;
@@ -189,6 +187,10 @@
   cursor: pointer;
   color: #6b7280;
 
+  i {
+    font-size: 10px;
+  }
+
   &:hover {
     color: #111827;
   }
@@ -199,6 +201,7 @@
   width: 14px;
   text-align: center;
   font-size: 13px;
+  color: #6b7280;
 }
 
 .label {

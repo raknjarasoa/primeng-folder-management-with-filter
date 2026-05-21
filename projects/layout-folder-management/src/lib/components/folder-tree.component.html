@@ -71,7 +71,7 @@
           [attr.aria-label]="row.expanded ? 'Collapse' : 'Expand'"
         >
           <i
-            class="fas text-[10px]"
+            class="fas"
             [class.fa-chevron-down]="row.expanded"
             [class.fa-chevron-right]="!row.expanded"
           ></i>
@@ -82,11 +82,11 @@
 
       @if (row.kind === 'file') {
         <div class="file-content" (click)="onRowClick(row)">
-          <i class="fas fa-file text-gray-500 row-icon"></i>
+          <i class="fas fa-file row-icon"></i>
           <span class="label">{{ row.label }}</span>
         </div>
       } @else if (editingId() === row.id) {
-        <i class="fas fa-folder text-gray-500 row-icon"></i>
+        <i class="fas fa-folder row-icon"></i>
         <input
           type="text"
           class="rename-input"
@@ -106,7 +106,7 @@
         </button>
       } @else {
         <div class="folder-content">
-          <i class="fas fa-folder text-gray-500 row-icon"></i>
+          <i class="fas fa-folder row-icon"></i>
           <span
             class="label"
             (dblclick)="!row.isOther && startRename(row.id, row.label)"
