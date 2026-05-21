@@ -231,7 +231,7 @@ describe('addFolder', () => {
   it('adds a folder at root level', () => {
     const { forest, newId } = addFolder(makeForest(), null, 'New Folder');
     expect(newId).toBeTruthy();
-    expect(newId.startsWith('f-')).toBe(true);
+    expect(newId.startsWith('folder-')).toBe(true);
     // addFolder inserts at index 0
     const newNode = forest[0];
     expect(newNode.id).toBe(newId);
@@ -257,8 +257,8 @@ describe('addFolder', () => {
   it('generates unique ids', () => {
     const { newId: id1 } = addFolder(makeForest(), null, 'A');
     const { newId: id2 } = addFolder(makeForest(), null, 'B');
-    expect(id1).toMatch(/^f-/);
-    expect(id2).toMatch(/^f-/);
+    expect(id1).toMatch(/^folder-/);
+    expect(id2).toMatch(/^folder-/);
   });
 });
 

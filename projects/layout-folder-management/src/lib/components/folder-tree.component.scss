@@ -141,11 +141,13 @@
   background: #f3f4f6;
 }
 
-// Icon + label wrapper using CSS grid layout
+// Icon + label wrapper using CSS grid layout. Second column uses `1fr` with
+// `minmax(0, ...)` so long labels truncate with ellipsis instead of pushing
+// the row wider than the viewport.
 .file-content,
 .folder-content {
   display: grid;
-  grid-template-columns: 14px minmax(0, max-content);
+  grid-template-columns: 14px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   min-width: 0;

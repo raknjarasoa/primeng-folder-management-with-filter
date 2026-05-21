@@ -36,6 +36,7 @@ import { LayoutInstance } from '../models/layout-instance.model';
 import {
   OrphanGroups,
   OTHERS_ROOT_ID,
+  OTHERS_USER_PREFIX,
   addFolder,
   collectAncestorIds,
   collectSessionFileIds,
@@ -144,8 +145,8 @@ export class FolderTreeComponent {
 
   // IDs of folders to expand so the selected file becomes visible. If the
   // selection lives inside the real session tree we return that path; otherwise
-  // we return the synthetic "Others" path. The hardcoded ids must stay in sync
-  // with the rows produced by flattenSessions in tree-helpers.ts.
+  // we return the synthetic "Others" path built from the shared constants
+  // exported by tree-helpers.ts.
   private readonly selectedFileAncestors = computed<string[]>(() => {
     const fileId = this.selectedFileId();
     if (!fileId) return [];
@@ -156,7 +157,7 @@ export class FolderTreeComponent {
     const layout = this.layoutsById()[fileId];
     if (layout) {
       const uname = layout.username || 'Unknown User';
-      return ['others-root', `others-${uname}`];
+      return [OTHERS_ROOT_ID, `${OTHERS_USER_PREFIX}${uname}`];
     }
 
     return [];
