@@ -9,9 +9,6 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
-import { IconFieldModule } from 'primeng/iconfield';
-import { InputIconModule } from 'primeng/inputicon';
-import { InputTextModule } from 'primeng/inputtext';
 import { Popover } from 'primeng/popover';
 
 import { FlatRowData, TreeItem } from '../models/folder-tree.models';
@@ -33,9 +30,6 @@ export type MoveFolderRequest = {
   imports: [
     FormsModule,
     AutoFocus,
-    InputTextModule,
-    IconFieldModule,
-    InputIconModule,
     Popover,
   ],
   templateUrl: './move-folder-picker.component.html',

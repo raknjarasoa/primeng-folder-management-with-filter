@@ -38,7 +38,9 @@
     [cdkDropListSortingDisabled]="true"
     [cdkDropListAutoScrollDisabled]="true"
     class="tree-viewport"
+    [class.tree-viewport--empty]="flatRows().length === 0"
     [itemSize]="ROW_HEIGHT"
+    [style.--row-count]="flatRows().length"
   >
     <div
       *cdkVirtualFor="let row of flatRows(); trackBy: trackRowId; let i = index"
@@ -53,7 +55,6 @@
       (cdkDragStarted)="onDragStarted($event, row)"
       (cdkDragMoved)="onDragMoved($event, row)"
       (cdkDragReleased)="onDragReleased($event, row)"
-      (click)="onRowClick(row)"
     >
       @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
         <div class="drop-line drop-line--before"></div>
@@ -79,13 +80,13 @@
         <span class="chevron-spacer"></span>
       }
 
-      <i
-        class="fas row-icon text-gray-500"
-        [class.fa-file]="row.kind === 'file'"
-        [class.fa-folder]="row.kind === 'folder'"
-      ></i>
-
-      @if (editingId() === row.id) {
+      @if (row.kind === 'file') {
+        <div class="file-content" (click)="onRowClick(row)">
+          <i class="fas fa-file text-gray-500 row-icon"></i>
+          <span class="label">{{ row.label }}</span>
+        </div>
+      } @else if (editingId() === row.id) {
+        <i class="fas fa-folder text-gray-500 row-icon"></i>
         <input
           type="text"
           class="rename-input"
@@ -104,12 +105,15 @@
           <i class="fas fa-check"></i>
         </button>
       } @else {
-        <span
-          class="label"
-          (dblclick)="!row.isOther && startRename(row.id, row.label)"
-        >
-          {{ row.label }}
-        </span>
+        <div class="folder-content">
+          <i class="fas fa-folder text-gray-500 row-icon"></i>
+          <span
+            class="label"
+            (dblclick)="!row.isOther && startRename(row.id, row.label)"
+          >
+            {{ row.label }}
+          </span>
+        </div>
       }
 
       <span class="actions">

@@ -98,11 +98,16 @@
 
 /* Tree Viewport */
 .tree-viewport {
-  height: 320px;
+  height: calc(var(--row-count, 0) * 28px);
+  max-height: 400px;
   border: 1px solid #9ca3af;
   border-radius: 4px;
   background: #ffffff;
-  contain: strict;
+  overflow-x: hidden;
+
+  &.tree-viewport--empty {
+    border-color: transparent;
+  }
 }
 
 /* Tree Row */
@@ -117,17 +122,9 @@
   position: relative;
   user-select: none;
   background: #ffffff;
-
-  &:hover {
-    background: #f3f4f6;
-  }
-
-  &.tree-row--selected {
-    background: #eff6ff;
-    border-top: 1px solid #3b82f6;
-    border-bottom: 1px solid #3b82f6;
-    color: #1e3a8a;
-  }
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 
   &.tree-row--target-into {
     background: #eff6ff;
@@ -139,6 +136,40 @@
   &.tree-row--other {
     cursor: default;
   }
+}
+
+// Folder rows keep full-row hover so actions stay visually grouped
+.tree-row:not(:has(.file-content)):hover {
+  background: #f3f4f6;
+}
+
+// Icon + label wrapper using CSS grid layout
+.file-content,
+.folder-content {
+  display: grid;
+  grid-template-columns: 14px minmax(0, max-content);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  border-radius: 4px;
+  height: 22px;
+  padding: 0 6px;
+  transition: background-color 80ms;
+}
+
+.file-content {
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+// Selection is limited only to the file content box
+.tree-row--selected .file-content {
+  background: #eff6ff;
+  outline: 1px solid #3b82f6;
+  color: #1e3a8a;
 }
 
 .chevron-btn,

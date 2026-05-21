@@ -1,4 +1,4 @@
-<p-popover #popover (onHide)="onHide()">
+<p-popover #popover styleClass="move-picker-popover" (onHide)="onHide()">
   <div class="move-picker">
     <div class="move-picker__header">
       <span class="move-picker__title">Move to</span>
@@ -16,16 +16,14 @@
 
     @if (moveCandidates().length > 5) {
       <div class="move-picker__filter">
-        <p-iconField iconPosition="left">
-          <p-inputIcon styleClass="fas fa-search" />
-          <input
-            pInputText
-            [pAutoFocus]="true"
-            class="w-full text-[12px] h-[28px]"
-            placeholder="Filter folders…"
-            [(ngModel)]="moveFilterText"
-          />
-        </p-iconField>
+        <i class="fas fa-search move-picker__filter-icon"></i>
+        <input
+          type="text"
+          [pAutoFocus]="true"
+          class="move-picker__filter-input"
+          placeholder="Filter folders…"
+          [(ngModel)]="moveFilterText"
+        />
       </div>
     }
 
