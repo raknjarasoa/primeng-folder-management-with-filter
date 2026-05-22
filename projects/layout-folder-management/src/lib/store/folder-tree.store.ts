@@ -1,5 +1,5 @@
-import { DestroyRef, effect, inject } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { effect } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import {
   patchState,
   signalStore,
@@ -274,15 +274,14 @@ export const FolderTreeStore = signalStore(
       });
 
       // Handle search text debouncing reactively
-      const filter$ = toObservable(store.filterText);
-      const subscription = filter$.pipe(debounceTime(300)).subscribe((debouncedValue) => {
-        patchState(store, { _debouncedFilterText: debouncedValue });
-      });
-
-      const destroyRef = inject(DestroyRef);
-      destroyRef.onDestroy(() => {
-        subscription.unsubscribe();
-      });
+      toObservable(store.filterText)
+        .pipe(
+          debounceTime(300),
+          takeUntilDestroyed()
+        )
+        .subscribe((debouncedValue) => {
+          patchState(store, { _debouncedFilterText: debouncedValue });
+        });
     },
   })
 );
