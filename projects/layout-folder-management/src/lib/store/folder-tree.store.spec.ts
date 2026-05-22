@@ -47,7 +47,7 @@ describe('FolderTreeStore', () => {
     expect(store.layouts()).toEqual([]);
     expect(store.selectedFileId()).toBeNull();
     expect(store.filterText()).toBe('');
-    expect(store.debouncedFilterText()).toBe('');
+    expect((store as any)._debouncedFilterText()).toBe('');
     expect(store.editingId()).toBeNull();
     expect(store.editingValue()).toBe('');
     expect(store.creatingId()).toBeNull();
@@ -62,7 +62,7 @@ describe('FolderTreeStore', () => {
     });
 
     it('should calculate layoutsById correctly', () => {
-      const layoutsMap = store.layoutsById();
+      const layoutsMap = (store as any)._layoutsById();
       expect(layoutsMap['file-1']).toBeDefined();
       expect(layoutsMap['file-1'].name).toBe('Alpha Report');
       expect(layoutsMap['file-2'].name).toBe('Beta Dashboard');
@@ -70,7 +70,7 @@ describe('FolderTreeStore', () => {
 
     it('should derive selectedFileAncestors for session files', () => {
       store.setSelectedFileId('file-2');
-      expect(store.selectedFileAncestors()).toEqual(['f-root', 'f-nested']);
+      expect((store as any)._selectedFileAncestors()).toEqual(['f-root', 'f-nested']);
     });
 
     it('should derive selectedFileAncestors for virtual/orphan files', () => {
@@ -85,7 +85,7 @@ describe('FolderTreeStore', () => {
       store.setLayouts([...makeLayouts(), orphanLayout]);
       store.setSelectedFileId('file-orphan');
 
-      expect(store.selectedFileAncestors()).toEqual(['virtual-others-root', 'virtual-user-Alice Smith']);
+      expect((store as any)._selectedFileAncestors()).toEqual(['virtual-others-root', 'virtual-user-Alice Smith']);
     });
 
     it('should calculate flatRows projection correctly', () => {
@@ -182,11 +182,11 @@ describe('FolderTreeStore', () => {
   describe('Search Query Debouncing', () => {
     it('should debounce search text query', async () => {
       store.updateFilterText('search-term');
-      expect(store.debouncedFilterText()).toBe('');
+      expect((store as any)._debouncedFilterText()).toBe('');
 
       // Wait past the 300ms debounce window
       await new Promise((resolve) => setTimeout(resolve, 350));
-      expect(store.debouncedFilterText()).toBe('search-term');
+      expect((store as any)._debouncedFilterText()).toBe('search-term');
     });
   });
 });

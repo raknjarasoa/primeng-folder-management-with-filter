@@ -35,7 +35,7 @@ const initialFolderTreeState = {
   layouts: [] as LayoutInstance[],
   selectedFileId: null as string | null,
   filterText: '',
-  debouncedFilterText: '',
+  _debouncedFilterText: '',
   editingId: null as string | null,
   editingValue: '',
   creatingId: null as string | null,
@@ -51,7 +51,7 @@ export const FolderTreeStore = signalStore(
   withState(initialFolderTreeState),
 
   withComputed((store) => {
-    const layoutsById = computed(() => {
+    const _layoutsById = computed(() => {
       const out: Record<string, LayoutInstance> = {};
       for (const l of store.layouts()) {
         out[l.id] = l;
@@ -59,14 +59,14 @@ export const FolderTreeStore = signalStore(
       return out;
     });
 
-    const selectedFileAncestors = computed(() => {
+    const _selectedFileAncestors = computed(() => {
       const fileId = store.selectedFileId();
       if (!fileId) return [];
 
       const sessionPath = collectAncestorIds(store.sessions(), fileId);
       if (sessionPath !== null) return sessionPath;
 
-      const layout = layoutsById()[fileId];
+      const layout = _layoutsById()[fileId];
       if (layout) {
         const uname = layout.username || 'Unknown User';
         return ['virtual-others-root', `virtual-user-${uname}`];
@@ -75,27 +75,27 @@ export const FolderTreeStore = signalStore(
       return [];
     });
 
-    const orphanGroups = computed(() => {
+    const _orphanGroups = computed(() => {
       const fileIds = collectSessionFileIds(store.sessions());
-      return groupOrphanLayouts(layoutsById(), fileIds);
+      return groupOrphanLayouts(_layoutsById(), fileIds);
     });
 
     const flatRows = computed(() =>
       flattenSessions(
         store.sessions(),
-        layoutsById(),
-        orphanGroups(),
+        _layoutsById(),
+        _orphanGroups(),
         store.expandedIds(),
-        store.debouncedFilterText(),
+        store._debouncedFilterText(),
       )
     );
 
-    const isFiltering = computed(() => store.debouncedFilterText().trim().length > 0);
+    const isFiltering = computed(() => store._debouncedFilterText().trim().length > 0);
 
     return {
-      layoutsById,
-      selectedFileAncestors,
-      orphanGroups,
+      _layoutsById,
+      _selectedFileAncestors,
+      _orphanGroups,
       flatRows,
       isFiltering,
     };
@@ -118,8 +118,8 @@ export const FolderTreeStore = signalStore(
       patchState(store, { filterText });
     },
 
-    updateDebouncedFilterText(debouncedFilterText: string): void {
-      patchState(store, { debouncedFilterText });
+    _updateDebouncedFilterText(debouncedFilterText: string): void {
+      patchState(store, { _debouncedFilterText: debouncedFilterText });
     },
 
     setDropTarget(dropTarget: DropTarget | null): void {
@@ -258,7 +258,7 @@ export const FolderTreeStore = signalStore(
       effect(() => {
         const selectedId = store.selectedFileId();
         if (!selectedId) return;
-        const ancestors = store.selectedFileAncestors();
+        const ancestors = store._selectedFileAncestors();
         if (ancestors.length === 0) return;
         patchState(store, (state) => {
           const next = new Set(state.expandedIds);
@@ -276,7 +276,7 @@ export const FolderTreeStore = signalStore(
       // Handle search text debouncing reactively
       const filter$ = toObservable(store.filterText);
       const subscription = filter$.pipe(debounceTime(300)).subscribe((debouncedValue) => {
-        patchState(store, { debouncedFilterText: debouncedValue });
+        patchState(store, { _debouncedFilterText: debouncedValue });
       });
 
       const destroyRef = inject(DestroyRef);
