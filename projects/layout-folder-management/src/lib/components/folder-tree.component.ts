@@ -107,22 +107,14 @@ export class FolderTreeComponent {
   // Active drag-drop target indicator (rendered as a blue line / highlight).
   protected readonly dropTarget = signal<DropTarget | null>(null);
 
-  // Tracks layout ids we've deleted locally so they don't reappear under
-  // "Others" while the parent's `layouts` input still contains them. Because
-  // the component is destroyed on popover close, this naturally resets on open.
-  private readonly suppressedLayoutIds = signal<ReadonlySet<string>>(new Set());
-
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
 
   private readonly layoutsById = computed<Record<string, LayoutInstance>>(() => {
-    const suppressed = this.suppressedLayoutIds();
     const out: Record<string, LayoutInstance> = {};
     for (const l of this.layouts()) {
-      if (!suppressed.has(l.id)) {
-        out[l.id] = l;
-      }
+      out[l.id] = l;
     }
     return out;
   });
@@ -484,15 +476,6 @@ export class FolderTreeComponent {
   private deleteNode(id: string): void {
     const { forest } = removeNode(this.sessions(), id);
     this.sessions.set(forest);
-    // Suppress the layout (if any) so it doesn't migrate to "Others" while
-    // the parent's input still contains it. Harmless for folder ids — they
-    // never match a layout.
-    this.suppressedLayoutIds.update((s) => {
-      if (s.has(id)) return s;
-      const next = new Set(s);
-      next.add(id);
-      return next;
-    });
     if (this.selectedFileId() === id) this.selectedFileId.set(null);
   }
 }
