@@ -96,6 +96,15 @@ export class TreeAutoscroller {
   }
 
   /**
+   * Pauses any active autoscroll animation frames by setting velocity to 0.
+   * Preserves the cached viewportRect to allow autoscrolling to resume when
+   * the pointer returns.
+   */
+  pause(): void {
+    this.setVelocity(0);
+  }
+
+  /**
    * Stops any active autoscroll animation frames and resets tracking state.
    * Should be invoked when the drag operation completes, is cancelled, or the component is destroyed.
    */

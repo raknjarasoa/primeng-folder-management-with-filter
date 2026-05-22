@@ -550,6 +550,7 @@ function matchesLayout(layout: LayoutInstance | undefined, query: string): boole
 }
 
 export type DropZone = 'before' | 'into' | 'after';
+
 export type DropTarget = {
   rowIndex: number;
   zone: DropZone;

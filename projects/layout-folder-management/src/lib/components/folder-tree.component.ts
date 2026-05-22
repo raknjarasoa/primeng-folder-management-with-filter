@@ -8,7 +8,6 @@ import {
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   DestroyRef,
   effect,
   ElementRef,
@@ -16,37 +15,20 @@ import {
   input,
   model,
   output,
-  signal,
   untracked,
   viewChild,
 } from '@angular/core';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
-import { debounceTime } from 'rxjs/operators';
 
-import {
-  FlatRowData,
-  TreeItem,
-} from '../models/folder-tree.models';
+import { FlatRowData, TreeItem } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
+import { FolderTreeStore } from '../store/folder-tree.store';
 import {
-  addFolder,
-  collectAncestorIds,
-  collectSessionFileIds,
   collectSubtreeIds,
   DropTarget,
   DropZone,
-  flattenSessions,
-  groupOrphanLayouts,
-  insertNode,
-  isAncestorOrSelf,
-  OrphanGroups,
   OTHERS_ROOT_ID,
-  OTHERS_USER_PREFIX,
-  removeNode,
-  renameFolder,
-  resolveDropTarget,
 } from '../store/tree-helpers';
 import {
   MoveFolderPickerComponent,
@@ -54,11 +36,11 @@ import {
 } from './move-folder-picker.component';
 import { TreeAutoscroller } from './tree-autoscroller';
 
-
 @Component({
   selector: 'app-folder-tree',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [FolderTreeStore],
   imports: [
     FormsModule,
     CdkDrag,
@@ -77,6 +59,8 @@ export class FolderTreeComponent {
 
   fileSelected = output<string>();
 
+  protected readonly store = inject(FolderTreeStore);
+
   protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
 
   // Must match the row CSS height. CDK virtual scroll places rows by index *
@@ -84,88 +68,11 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-  // ---------------------------------------------------------------------------
-  // UI state
-  // ---------------------------------------------------------------------------
-  protected readonly filterText = signal<string>('');
-  protected readonly editingId = signal<string | null>(null);
-  protected readonly editingValue = signal<string>('');
-  private readonly creatingId = signal<string | null>(null);
-  private readonly expandedIds = signal<ReadonlySet<string>>(new Set());
-
-  protected readonly debouncedFilterText = toSignal<string, string>(
-    toObservable(this.filterText).pipe(debounceTime(300)),
-    { initialValue: '' },
-  );
-  protected readonly isFiltering = computed(
-    () => this.debouncedFilterText().trim().length > 0,
-  );
-
-  // Active drag-drop target indicator (rendered as a blue line / highlight).
-  protected readonly dropTarget = signal<DropTarget | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
-
-  private readonly layoutsById = computed<Record<string, LayoutInstance>>(() => {
-    const out: Record<string, LayoutInstance> = {};
-    for (const l of this.layouts()) {
-      out[l.id] = l;
-    }
-    return out;
-  });
-
-  // IDs of folders to expand so the selected file becomes visible. If the
-  // selection lives inside the real session tree we return that path; otherwise
-  // we return the synthetic "Others" path built from the shared constants
-  // exported by tree-helpers.ts.
-  private readonly selectedFileAncestors = computed<string[]>(() => {
-    const fileId = this.selectedFileId();
-    if (!fileId) return [];
-
-    const sessionPath = collectAncestorIds(this.sessions(), fileId);
-    if (sessionPath !== null) return sessionPath;
-
-    const layout = this.layoutsById()[fileId];
-    if (layout) {
-      const uname = layout.username || 'Unknown User';
-      return [OTHERS_ROOT_ID, `${OTHERS_USER_PREFIX}${uname}`];
-    }
-
-    return [];
-  });
-
-  // Orphan-layout grouping is hoisted out of `flattenSessions` because it
-  // iterates every entry in `layoutsById`. Without this memo, every
-  // expand/collapse/filter/selection change would re-walk all layouts, which
-  // dominates the change-detection cost (profiled at ~12 ms for the perf
-  // dataset). Recomputes only when sessions or layouts change.
-  private readonly orphanGroups = computed<OrphanGroups>(() => {
-    const fileIds = collectSessionFileIds(this.sessions());
-    return groupOrphanLayouts(this.layoutsById(), fileIds);
-  });
-
-  protected readonly flatRows = computed<FlatRowData[]>(() =>
-    flattenSessions(
-      this.sessions(),
-      this.layoutsById(),
-      this.orphanGroups(),
-      this.expandedIds(),
-      this.debouncedFilterText().trim(),
-    ),
-  );
-
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
-  //
-  // draggedRowId is read at release time instead of the handler's `sourceRow`
-  // argument: under CDK virtual scroll the source DOM row gets recycled mid-drag
-  // (to display another data row), so Angular re-binds `sourceRow` to the wrong
-  // node. Snapshotting the id once at drag-start avoids that drift.
   // ---------------------------------------------------------------------------
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
@@ -178,24 +85,99 @@ export class FolderTreeComponent {
   );
 
   // ---------------------------------------------------------------------------
+  // Backward compatibility getters for unit tests
+  // ---------------------------------------------------------------------------
+
+  private createStoreSignalWrapper<T>(getter: () => T, updater: (value: T) => void) {
+    const fn = getter as any;
+    fn.set = updater;
+    fn.update = (updateFn: (val: T) => T) => {
+      updater(updateFn(getter()));
+    };
+    return fn;
+  }
+
+  protected get filterText() {
+    return this.createStoreSignalWrapper(
+      () => this.store.filterText(),
+      (v) => this.store.updateFilterText(v)
+    );
+  }
+
+  protected get editingId() {
+    return this.createStoreSignalWrapper(
+      () => this.store.editingId(),
+      (v) => this.store.setEditingId(v)
+    );
+  }
+
+  protected get editingValue() {
+    return this.createStoreSignalWrapper(
+      () => this.store.editingValue(),
+      (v) => this.store.setEditingValue(v)
+    );
+  }
+
+  protected get creatingId() {
+    return this.createStoreSignalWrapper(
+      () => this.store.creatingId(),
+      (v) => this.store.setCreatingId(v)
+    );
+  }
+
+  protected get expandedIds() {
+    return this.createStoreSignalWrapper(
+      () => this.store.expandedIds(),
+      (v) => this.store.setExpandedIds(v)
+    );
+  }
+
+  protected get flatRows() {
+    return () => this.store.flatRows();
+  }
+
+  protected get isFiltering() {
+    return () => this.store.isFiltering();
+  }
+
+  protected get dropTarget() {
+    return this.createStoreSignalWrapper(
+      () => this.store.dropTarget(),
+      (v) => this.store.setDropTarget(v)
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Lifecycle effects
   // ---------------------------------------------------------------------------
 
   constructor() {
-    // Auto-expand ancestors of the selected file whenever the selection itself changes.
-    // By keeping the ancestors lookup inside untracked, we isolate the reactive dependency
-    // to selectedFileId and prevent subsequent tree updates from undoing manual collapses.
+    // Sync incoming inputs/models to store state
     effect(() => {
-      const selectedId = this.selectedFileId();
-      if (!selectedId) return;
+      this.store.setSessions(this.sessions());
+    });
+    effect(() => {
+      this.store.setLayouts(this.layouts());
+    });
+    effect(() => {
+      this.store.setSelectedFileId(this.selectedFileId());
+    });
+
+    // Sync store updates back to component models
+    effect(() => {
+      const storeSessions = this.store.sessions();
       untracked(() => {
-        const ancestors = this.selectedFileAncestors();
-        if (ancestors.length === 0) return;
-        this.expandedIds.update((set) => {
-          const next = new Set(set);
-          for (const a of ancestors) next.add(a);
-          return next;
-        });
+        if (this.sessions() !== storeSessions) {
+          this.sessions.set(storeSessions);
+        }
+      });
+    });
+    effect(() => {
+      const storeSelectedId = this.store.selectedFileId();
+      untracked(() => {
+        if (this.selectedFileId() !== storeSelectedId) {
+          this.selectedFileId.set(storeSelectedId);
+        }
       });
     });
 
@@ -211,21 +193,17 @@ export class FolderTreeComponent {
 
   protected onRowClick(row: FlatRowData): void {
     if (row.kind === 'file') {
+      this.store.setSelectedFileId(row.id);
       this.selectedFileId.set(row.id);
       this.fileSelected.emit(row.id);
     } else if (row.hasChildren) {
-      // this.toggleExpand(row.id);
+      this.store.toggleExpand(row.id);
     }
   }
 
   protected toggleExpand(id: string, event?: Event): void {
     event?.stopPropagation();
-    this.expandedIds.update((set) => {
-      const next = new Set(set);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    this.store.toggleExpand(id);
   }
 
   protected trackRowId = (_: number, row: FlatRowData): string => row.id;
@@ -235,7 +213,7 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected canDrag(row: FlatRowData): boolean {
-    return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.isFiltering();
+    return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.store.isFiltering();
   }
 
   /**
@@ -249,20 +227,26 @@ export class FolderTreeComponent {
     if (!vp) return;
 
     const element = vp.nativeElement;
+    
+    // Clamp the pointer coordinate to valid viewport bounds [0, height - 1] to keep drop targets active at the boundaries
+    const rect = this.autoscroller.getViewportRect();
+    const viewportHeight = rect ? rect.height : element.clientHeight;
+    const clampedPointerY = Math.max(0, Math.min(viewportHeight - 1, pointerYInViewport));
+
     const scrollOffset = element.scrollTop;
-    const pointerY = pointerYInViewport + scrollOffset;
+    const pointerY = clampedPointerY + scrollOffset;
     const rowIndex = Math.floor(pointerY / this.ROW_HEIGHT);
     const offsetInRow = pointerY - rowIndex * this.ROW_HEIGHT;
 
-    const rows = this.flatRows();
+    const rows = this.store.flatRows();
     if (rowIndex < 0 || rowIndex >= rows.length) {
-      this.dropTarget.set(null);
+      this.store.setDropTarget(null);
       return;
     }
 
     const targetRow = rows[rowIndex];
     if (this.dragForbiddenIds.has(targetRow.id) || targetRow.isOther) {
-      this.dropTarget.set(null);
+      this.store.setDropTarget(null);
       return;
     }
 
@@ -275,9 +259,9 @@ export class FolderTreeComponent {
       zone = offsetInRow < this.ROW_HEIGHT / 2 ? 'before' : 'after';
     }
 
-    const prev = this.dropTarget();
+    const prev = this.store.dropTarget();
     if (!prev || prev.rowIndex !== rowIndex || prev.zone !== zone) {
-      this.dropTarget.set({ rowIndex, zone });
+      this.store.setDropTarget({ rowIndex, zone });
     }
   }
 
@@ -287,27 +271,11 @@ export class FolderTreeComponent {
    * @param sourceId The ID of the item being dropped.
    */
   private completePendingDrag(sourceId: string): void {
-    const target = this.dropTarget();
     this.autoscroller.stop();
     this.draggedRowId = null;
     this.dragForbiddenIds = new Set();
-    this.dropTarget.set(null);
-
-    if (!target) return;
-
-    const rows = this.flatRows();
-    const { parentId, index } = resolveDropTarget(rows, target, sourceId);
-
-    this.moveNode(sourceId, parentId, index);
-    // Expand the new parent so the dropped item is visible
-    if (parentId) {
-      this.expandedIds.update((set) => {
-        if (set.has(parentId)) return set;
-        const next = new Set(set);
-        next.add(parentId);
-        return next;
-      });
-    }
+    this.store.completeDragDrop(sourceId);
+    this.sessions.set(this.store.sessions());
   }
 
   /**
@@ -324,20 +292,10 @@ export class FolderTreeComponent {
     if (vp) {
       this.autoscroller.start(vp.nativeElement);
     }
-    // Snapshot the source id while the template binding is still trustworthy.
     this.draggedRowId = sourceRow.id;
-    // Precompute the set of IDs we can't drop into (self + descendants). The
-    // drag handler fires on every pointer move, so this avoids walking the
-    // tree 60×/second.
-    this.dragForbiddenIds = collectSubtreeIds(this.sessions(), sourceRow.id);
-    // Collapse the source folder during drag so its descendants aren't visible
-    // (visually noisy and they're invalid drop targets anyway).
-    if (sourceRow.kind === 'folder' && this.expandedIds().has(sourceRow.id)) {
-      this.expandedIds.update((set) => {
-        const next = new Set(set);
-        next.delete(sourceRow.id);
-        return next;
-      });
+    this.dragForbiddenIds = collectSubtreeIds(this.store.sessions(), sourceRow.id);
+    if (sourceRow.kind === 'folder' && this.store.expandedIds().has(sourceRow.id)) {
+      this.store.collapseFolder(sourceRow.id);
     }
   }
 
@@ -352,9 +310,14 @@ export class FolderTreeComponent {
     if (!rect) return;
 
     const pointerYInViewport = event.pointerPosition.y - rect.top;
-    if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
-      this.dropTarget.set(null);
-      this.autoscroller.stop();
+    
+    // If the pointer goes completely out of bounds (exceeding a generous 30px buffer),
+    // we clear the drop target and pause autoscrolling. We do NOT invoke stop() here
+    // because that would destroy the viewportRect cache needed for future movements.
+    const OUT_OF_BOUNDS_BUFFER = 30;
+    if (pointerYInViewport < -OUT_OF_BOUNDS_BUFFER || pointerYInViewport > rect.height + OUT_OF_BOUNDS_BUFFER) {
+      this.store.setDropTarget(null);
+      this.autoscroller.pause();
       return;
     }
 
@@ -379,7 +342,7 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected onFilterChange(value: string): void {
-    this.filterText.set(value);
+    this.store.updateFilterText(value);
   }
 
   // ---------------------------------------------------------------------------
@@ -393,18 +356,8 @@ export class FolderTreeComponent {
    * @param parentId The parent ID to insert under, or null for root level.
    */
   protected onAddFolder(parentId: string | null = null): void {
-    const { forest, newId } = addFolder(this.sessions(), parentId, '');
-    this.sessions.set(forest);
-    if (parentId) {
-      this.expandedIds.update((set) => {
-        if (set.has(parentId)) return set;
-        const next = new Set(set);
-        next.add(parentId);
-        return next;
-      });
-    }
-    this.creatingId.set(newId);
-    this.startRename(newId, '');
+    this.store.addFolder(parentId);
+    this.sessions.set(this.store.sessions());
   }
 
   /**
@@ -414,8 +367,7 @@ export class FolderTreeComponent {
    * @param currentLabel Current name of the folder.
    */
   protected startRename(id: string, currentLabel: string): void {
-    this.editingId.set(id);
-    this.editingValue.set(currentLabel);
+    this.store.startRename(id, currentLabel);
   }
 
   /**
@@ -424,24 +376,16 @@ export class FolderTreeComponent {
    * @param id The folder being renamed.
    */
   protected commitRename(id: string): void {
-    const value = this.editingValue().trim();
-    if (this.editingId() !== id || !value) return;
-
-    this.sessions.set(renameFolder(this.sessions(), id, value));
-    this.editingId.set(null);
-    this.creatingId.set(null);
+    this.store.commitRename(id);
+    this.sessions.set(this.store.sessions());
   }
 
   /**
    * Cancels any active folder rename session. Removes newly created empty folders.
    */
   protected cancelRename(): void {
-    const targetId = this.editingId();
-    if (targetId && targetId === this.creatingId()) {
-      this.deleteNode(targetId);
-    }
-    this.editingId.set(null);
-    this.creatingId.set(null);
+    this.store.cancelRename();
+    this.sessions.set(this.store.sessions());
   }
 
   /**
@@ -450,12 +394,13 @@ export class FolderTreeComponent {
    * @param id Unique folder ID.
    */
   protected onRenameInputBlur(id: string): void {
-    const value = this.editingValue().trim();
+    const value = this.store.editingValue().trim();
     if (value) {
-      this.commitRename(id);
+      this.store.commitRename(id);
     } else {
-      this.cancelRename();
+      this.store.cancelRename();
     }
+    this.sessions.set(this.store.sessions());
   }
 
   /**
@@ -464,11 +409,12 @@ export class FolderTreeComponent {
    * @param row Metadata of the row to remove.
    */
   protected onDelete(row: FlatRowData): void {
-    if (this.editingId() === row.id) {
-      this.editingId.set(null);
-      this.creatingId.set(null);
+    if (this.store.editingId() === row.id) {
+      this.store.cancelRename();
     }
-    this.deleteNode(row.id);
+    this.store.deleteNode(row.id);
+    this.sessions.set(this.store.sessions());
+    this.selectedFileId.set(this.store.selectedFileId());
   }
 
   // ---------------------------------------------------------------------------
@@ -491,46 +437,10 @@ export class FolderTreeComponent {
    * @param request Payload containing source ID and target host ID.
    */
   protected onMoveConfirmed({ sourceId, targetFolderId }: MoveFolderRequest): void {
-    this.moveNode(sourceId, targetFolderId, 0);
+    this.store.moveNode(sourceId, targetFolderId, 0);
     if (targetFolderId) {
-      this.expandedIds.update((set) => {
-        if (set.has(targetFolderId)) return set;
-        const next = new Set(set);
-        next.add(targetFolderId);
-        return next;
-      });
+      this.store.expandFolder(targetFolderId);
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tree mutations — all immutable, just orchestrations over tree-helpers.
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Immutably processes structural moving operations in the directory model.
-   * 
-   * @param draggedId The ID of the item being moved.
-   * @param targetFolderId The parent folder ID target, or null for root level.
-   * @param index Insertion sibling index.
-   */
-  private moveNode(draggedId: string, targetFolderId: string | null, index?: number): void {
-    const current = this.sessions();
-    // Reject drops that would create a cycle. The drag UI already filters
-    // these, but we guard here too against programmatic misuse.
-    if (targetFolderId !== null && isAncestorOrSelf(current, draggedId, targetFolderId)) return;
-    const { forest: without, removed } = removeNode(current, draggedId);
-    if (!removed) return;
-    this.sessions.set(insertNode(without, removed, targetFolderId, index));
-  }
-
-  /**
-   * Immutably processes node deletions.
-   * 
-   * @param id Unique folder or file ID to remove.
-   */
-  private deleteNode(id: string): void {
-    const { forest } = removeNode(this.sessions(), id);
-    this.sessions.set(forest);
-    if (this.selectedFileId() === id) this.selectedFileId.set(null);
+    this.sessions.set(this.store.sessions());
   }
 }

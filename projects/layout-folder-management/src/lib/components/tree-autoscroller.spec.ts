@@ -106,4 +106,22 @@ describe('TreeAutoscroller', () => {
     expect(tickSpy).not.toHaveBeenCalled();
     expect(scroller.getViewportRect()).toBeNull();
   });
+
+  it('pauses autoscrolling but retains viewportRect geometry when pause is called', () => {
+    const tickSpy = vi.fn();
+    const scroller = new TreeAutoscroller(() => mockElement, {
+      viewportZonePx: 60,
+      onScrollTick: tickSpy,
+    });
+
+    scroller.start(mockElement);
+    scroller.move(10);
+    scroller.pause();
+
+    vi.runOnlyPendingTimers();
+    expect(mockElement.scrollTop).toBe(100); // Unchanged
+    expect(tickSpy).not.toHaveBeenCalled();
+    expect(scroller.getViewportRect()).not.toBeNull();
+    expect(scroller.getViewportRect()?.height).toBe(400);
+  });
 });
