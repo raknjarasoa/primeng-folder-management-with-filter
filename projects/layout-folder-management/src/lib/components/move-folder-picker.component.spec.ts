@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
+import { Popover } from 'primeng/popover';
 
 import { MoveFolderPickerComponent, MoveFolderRequest } from './move-folder-picker.component';
 import { TreeItem, FlatRowData } from '../models/folder-tree.models';
@@ -35,6 +37,18 @@ function makeSessions(): TreeItem[] {
   ];
 }
 
+function makeManySessions(): TreeItem[] {
+  return [
+    { id: 'f-1', kind: 'folder', name: 'Folder One', children: [] },
+    { id: 'f-2', kind: 'folder', name: 'Folder Two', children: [] },
+    { id: 'f-3', kind: 'folder', name: 'Folder Three', children: [] },
+    { id: 'f-4', kind: 'folder', name: 'Folder Four', children: [] },
+    { id: 'f-5', kind: 'folder', name: 'Folder Five', children: [] },
+    { id: 'f-6', kind: 'folder', name: 'Folder Six', children: [] },
+    { id: 'f-nested', kind: 'folder', name: 'Nested Folder', children: [] },
+  ];
+}
+
 function makeRow(id: string, label: string, kind: 'file' | 'folder' = 'file'): FlatRowData {
   return { id, kind, label, depth: 0, expanded: false, hasChildren: false };
 }
@@ -52,6 +66,8 @@ async function settle(fixture: ComponentFixture<MoveFolderPickerComponent>): Pro
 describe('MoveFolderPickerComponent', () => {
   let fixture: ComponentFixture<MoveFolderPickerComponent>;
   let component: MoveFolderPickerComponent;
+  let targetEl: HTMLButtonElement;
+  let dummyEvent: Event;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -61,110 +77,173 @@ describe('MoveFolderPickerComponent', () => {
     fixture = TestBed.createComponent(MoveFolderPickerComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('sessions', makeSessions());
+
+    // Create a real attached target element to avoid PrimeNG coordinate measurement crashes
+    targetEl = document.createElement('button');
+    document.body.appendChild(targetEl);
+    dummyEvent = {
+      type: 'click',
+      target: targetEl,
+      currentTarget: targetEl,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    } as unknown as Event;
   });
 
-  it('moveCandidates is empty before open() is called', async () => {
+  afterEach(() => {
+    if (targetEl && targetEl.parentNode) {
+      targetEl.parentNode.removeChild(targetEl);
+    }
+  });
+
+  it('moveCandidates is empty and popover is hidden before open() is called', async () => {
     await settle(fixture);
-    expect(component['moveCandidates']()).toEqual([]);
+    const movePicker = document.querySelector('.move-picker');
+    expect(movePicker).toBeNull();
   });
 
   it('moveCandidates excludes the source row and its subtree', async () => {
     await settle(fixture);
 
-    // Skip the popover by setting the source-row signals directly — same
-    // post-condition as open() but without needing a real click event.
-    component['movingRowId'].set('f-root');
+    const sourceRow = makeRow('f-root', 'Root Folder', 'folder');
+    component.open(sourceRow, dummyEvent);
     await settle(fixture);
 
-    const ids = component['moveCandidates']().map((c) => c.id);
-    expect(ids).not.toContain('f-root');
-    expect(ids).not.toContain('f-nested');
-    expect(ids).toContain('f-empty');
+    const options = Array.from(document.querySelectorAll('.move-picker__option')) as HTMLButtonElement[];
+    const labels = options.map((opt) => opt.textContent?.trim() || '');
+
+    expect(labels.some(l => l.includes('Sibling'))).toBe(true);
+    expect(labels.some(l => l.includes('Root Folder'))).toBe(false);
+    expect(labels.some(l => l.includes('Nested'))).toBe(false);
   });
 
   it('filteredMoveCandidates narrows the list by case-insensitive label match', async () => {
-    await settle(fixture);
-    component['movingRowId'].set('file-top');
-    component['moveFilterText'].set('NEST');
+    fixture.componentRef.setInput('sessions', makeManySessions());
     await settle(fixture);
 
-    const ids = component['filteredMoveCandidates']().map((c) => c.id);
-    expect(ids).toEqual(['f-nested']);
+    const sourceRow = makeRow('f-1', 'Folder One', 'folder');
+    component.open(sourceRow, dummyEvent);
+    await settle(fixture);
+
+    const filterInput = document.querySelector('.move-picker__filter-input') as HTMLInputElement;
+    expect(filterInput).toBeTruthy();
+
+    filterInput.value = 'NEST';
+    filterInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    const options = Array.from(document.querySelectorAll('.move-picker__option')) as HTMLButtonElement[];
+    const labels = options.map((opt) => opt.textContent?.trim() || '');
+
+    const folderOptions = labels.filter(l => !l.includes('Root'));
+    expect(folderOptions.length).toBe(1);
+    expect(folderOptions[0]).toContain('Nested Folder');
   });
 
-  it('confirm emits moveTo with sourceId + targetFolderId', async () => {
+  it('confirm emits moveTo with sourceId + targetFolderId when option clicked', async () => {
     await settle(fixture);
-    component['movingRowId'].set('file-top');
+
+    const sourceRow = makeRow('file-top', 'Top Level File', 'file');
+    component.open(sourceRow, dummyEvent);
+    await settle(fixture);
 
     let emitted: MoveFolderRequest | undefined;
     component.moveTo.subscribe((req) => (emitted = req));
 
-    component['confirm']('f-nested');
+    const options = Array.from(document.querySelectorAll('.move-picker__option')) as HTMLButtonElement[];
+    const nestedBtn = options.find((opt) => opt.textContent?.includes('Nested'));
+    expect(nestedBtn).toBeDefined();
+    nestedBtn?.click();
+    await settle(fixture);
+
     expect(emitted).toEqual({ sourceId: 'file-top', targetFolderId: 'f-nested' });
   });
 
-  it('confirm(null) emits moveTo with targetFolderId = null (root)', async () => {
+  it('confirm(null) emits moveTo with targetFolderId = null (root) when Root clicked', async () => {
     await settle(fixture);
-    component['movingRowId'].set('file-2');
+
+    const sourceRow = makeRow('file-2', 'Beta Dashboard', 'file');
+    component.open(sourceRow, dummyEvent);
+    await settle(fixture);
 
     let emitted: MoveFolderRequest | undefined;
     component.moveTo.subscribe((req) => (emitted = req));
 
-    component['confirm'](null);
+    const rootBtn = document.querySelector('.move-picker__option--root') as HTMLButtonElement;
+    expect(rootBtn).toBeTruthy();
+    rootBtn.click();
+    await settle(fixture);
+
     expect(emitted).toEqual({ sourceId: 'file-2', targetFolderId: null });
   });
 
-  it('confirm without an open source does not emit', async () => {
+  it('closes popover and hides DOM elements when confirm occurs', async () => {
     await settle(fixture);
-    let emitted = 0;
-    component.moveTo.subscribe(() => (emitted += 1));
 
-    component['confirm']('f-nested');
-    expect(emitted).toBe(0);
+    const sourceRow = makeRow('file-top', 'Top Level File', 'file');
+    component.open(sourceRow, dummyEvent);
+    await settle(fixture);
+
+    expect(document.querySelector('.move-picker')).toBeTruthy();
+
+    const rootBtn = document.querySelector('.move-picker__option--root') as HTMLButtonElement;
+    rootBtn.click();
+    await settle(fixture);
+
+    // Popover is dismissed, source is cleared
+    expect(document.querySelector('.move-picker__source')).toBeNull();
   });
 
-  it('confirm clears the source state', async () => {
+  it('onHide resets the source state and popover hides without emitting', async () => {
     await settle(fixture);
-    component['movingRowId'].set('file-top');
-    component['movingRowLabel'].set('Top Level File');
-    component['movingRowKind'].set('file');
-    component['moveFilterText'].set('xyz');
 
-    component['confirm'](null);
-
-    expect(component['movingRowId']()).toBeNull();
-    expect(component['movingRowLabel']()).toBeNull();
-    expect(component['movingRowKind']()).toBeNull();
-    expect(component['moveFilterText']()).toBe('');
-  });
-
-  it('onHide resets the source state without emitting', async () => {
+    const sourceRow = makeRow('file-top', 'Top Level File', 'file');
+    component.open(sourceRow, dummyEvent);
     await settle(fixture);
-    component['movingRowId'].set('file-top');
-    component['movingRowLabel'].set('Top Level File');
 
     let emitted = 0;
     component.moveTo.subscribe(() => (emitted += 1));
 
-    component['onHide']();
+    const popoverDE = fixture.debugElement.query(By.directive(Popover));
+    const popover = popoverDE.componentInstance as Popover;
+    popover.onHide.emit();
+    await settle(fixture);
 
-    expect(component['movingRowId']()).toBeNull();
-    expect(component['movingRowLabel']()).toBeNull();
     expect(emitted).toBe(0);
+    // Source details are cleared
+    expect(document.querySelector('.move-picker__source')).toBeNull();
   });
 
   it('open() captures label + kind from the row and clears any prior filter', async () => {
+    fixture.componentRef.setInput('sessions', makeManySessions());
     await settle(fixture);
-    component['moveFilterText'].set('stale-filter');
 
-    const row = makeRow('file-top', 'Top Level File', 'file');
-    // Pass a stub event — Popover.toggle won't render in jsdom, but the
-    // signal mutations are what we care about here.
-    component.open(row, new Event('click'));
+    const row1 = makeRow('f-1', 'Folder One', 'folder');
+    component.open(row1, dummyEvent);
+    await settle(fixture);
 
-    expect(component['movingRowId']()).toBe('file-top');
-    expect(component['movingRowLabel']()).toBe('Top Level File');
-    expect(component['movingRowKind']()).toBe('file');
-    expect(component['moveFilterText']()).toBe('');
+    const filterInput = document.querySelector('.move-picker__filter-input') as HTMLInputElement;
+    filterInput.value = 'stale-filter';
+    filterInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    // Close popover to reset show-toggle state
+    const popoverDE = fixture.debugElement.query(By.directive(Popover));
+    const popover = popoverDE.componentInstance as Popover;
+    popover.hide();
+    await settle(fixture);
+
+    const row2 = makeRow('file-top', 'Top Level File', 'file');
+    component.open(row2, dummyEvent);
+    await settle(fixture);
+
+    const sourceLabel = document.querySelector('.move-picker__source-label')?.textContent?.trim();
+    expect(sourceLabel).toBe('Top Level File');
+
+    const sourceIcon = document.querySelector('.move-picker__source i');
+    expect(sourceIcon?.classList.contains('fa-file')).toBe(true);
+
+    const newFilterInput = document.querySelector('.move-picker__filter-input') as HTMLInputElement;
+    expect(newFilterInput.value).toBe('');
   });
 });

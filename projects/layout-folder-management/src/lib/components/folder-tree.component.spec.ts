@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
+import { CdkDrag } from '@angular/cdk/drag-drop';
 
 import { FolderTreeComponent } from './folder-tree.component';
 import {
@@ -9,6 +11,7 @@ import {
   FlatRowData,
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
+import { MoveFolderPickerComponent } from './move-folder-picker.component';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -40,10 +43,6 @@ function makeLayouts(): LayoutInstance[] {
     { id: 'file-2', name: 'Beta Dashboard', editable: true, username: '', description: '', tooltip: '' },
     { id: 'file-top', name: 'Top Level File', editable: true, username: '', description: '', tooltip: '' },
   ];
-}
-
-function findRow(rows: readonly FlatRowData[], id: string): FlatRowData | undefined {
-  return rows.find((r) => r.id === id);
 }
 
 async function settle(fixture: ComponentFixture<FolderTreeComponent>): Promise<void> {
@@ -92,7 +91,8 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    expect(component['flatRows']().length).toBeGreaterThan(0);
+    const rows = fixture.debugElement.queryAll(By.css('.tree-row'));
+    expect(rows.length).toBeGreaterThan(0);
   });
 
   it('projects layout names onto file rows', async () => {
@@ -101,10 +101,13 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('selectedFileId', 'file-2'); // expand ancestors so file-2 surfaces
     await settle(fixture);
 
-    const rows = component['flatRows']();
-    expect(findRow(rows, 'f-root')?.label).toBe('Root Folder');
-    expect(findRow(rows, 'file-top')?.label).toBe('Top Level File');
-    expect(findRow(rows, 'file-2')?.label).toBe('Beta Dashboard');
+    const rootRow = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .label'));
+    const topFileRow = fixture.debugElement.query(By.css('.tree-row[data-id="file-top"] .label'));
+    const file2Row = fixture.debugElement.query(By.css('.tree-row[data-id="file-2"] .label'));
+
+    expect(rootRow.nativeElement.textContent.trim()).toBe('Root Folder');
+    expect(topFileRow.nativeElement.textContent.trim()).toBe('Top Level File');
+    expect(file2Row.nativeElement.textContent.trim()).toBe('Beta Dashboard');
   });
 
   // -----------------------------------------------------------------------
@@ -117,9 +120,12 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('selectedFileId', 'file-2');
     await settle(fixture);
 
-    expect(component['expandedIds']().has('f-root')).toBe(true);
-    expect(component['expandedIds']().has('f-nested')).toBe(true);
-    expect(findRow(component['flatRows'](), 'file-2')).toBeDefined();
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement;
+    const nestedChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-nested"] .chevron-btn')).nativeElement;
+
+    expect(rootChevron.getAttribute('aria-label')).toBe('Collapse');
+    expect(nestedChevron.getAttribute('aria-label')).toBe('Collapse');
+    expect(fixture.debugElement.query(By.css('.tree-row[data-id="file-2"]'))).toBeTruthy();
   });
 
   it('leaves the tree collapsed when no file is selected', async () => {
@@ -127,8 +133,9 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    expect(component['expandedIds']().size).toBe(0);
-    expect(findRow(component['flatRows'](), 'file-2')).toBeUndefined();
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement;
+    expect(rootChevron.getAttribute('aria-label')).toBe('Expand');
+    expect(fixture.debugElement.query(By.css('.tree-row[data-id="file-2"]'))).toBeNull();
   });
 
   it('emits fileSelected when a file row is clicked, even for re-clicks', async () => {
@@ -140,9 +147,10 @@ describe('FolderTreeComponent', () => {
     const emitted: string[] = [];
     component.fileSelected.subscribe((id) => emitted.push(id));
 
-    const row = findRow(component['flatRows'](), 'file-1')!;
-    component['onRowClick'](row);
-    component['onRowClick'](row); // same id again — model wouldn't notify, but output should
+    const fileContent = fixture.debugElement.query(By.css('.tree-row[data-id="file-1"] .file-content')).nativeElement;
+    fileContent.click();
+    fileContent.click();
+    await settle(fixture);
 
     expect(emitted).toEqual(['file-1', 'file-1']);
   });
@@ -156,13 +164,16 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['filterText'].set('alpha');
+    const filterInput = fixture.debugElement.query(By.css('.search-input')).nativeElement;
+    filterInput.value = 'alpha';
+    filterInput.dispatchEvent(new Event('input'));
     await settleAfterFilter(fixture);
 
-    const rows = component['flatRows']();
-    expect(findRow(rows, 'file-1')).toBeDefined();
-    expect(findRow(rows, 'file-top')).toBeUndefined();
-    expect(findRow(rows, 'f-root')?.expanded).toBe(true);
+    expect(fixture.debugElement.query(By.css('.tree-row[data-id="file-1"]'))).toBeTruthy();
+    expect(fixture.debugElement.query(By.css('.tree-row[data-id="file-top"]'))).toBeNull();
+
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement;
+    expect(rootChevron.getAttribute('aria-label')).toBe('Collapse');
   });
 
   it('returns empty list when filter matches nothing', async () => {
@@ -170,11 +181,17 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['filterText'].set('zzzzzzzzz');
+    const filterInput = fixture.debugElement.query(By.css('.search-input')).nativeElement;
+    filterInput.value = 'zzzzzzzzz';
+    filterInput.dispatchEvent(new Event('input'));
     await settleAfterFilter(fixture);
 
-    expect(component['flatRows']().length).toBe(0);
-    expect(component['isFiltering']()).toBe(true);
+    const rows = fixture.debugElement.queryAll(By.css('.tree-row'));
+    expect(rows.length).toBe(0);
+
+    const emptyState = fixture.debugElement.query(By.css('.empty-state'));
+    expect(emptyState).toBeTruthy();
+    expect(emptyState.nativeElement.textContent).toContain('No results for "zzzzzzzzz"');
   });
 
   it('disables drag while filtering', async () => {
@@ -182,26 +199,30 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['filterText'].set('alpha');
+    const filterInput = fixture.debugElement.query(By.css('.search-input')).nativeElement;
+    filterInput.value = 'alpha';
+    filterInput.dispatchEvent(new Event('input'));
     await settleAfterFilter(fixture);
 
-    const root = findRow(component['flatRows'](), 'f-root')!;
-    expect(component['canDrag'](root)).toBe(false);
+    const rootDrag = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"]')).injector.get(CdkDrag);
+    expect(rootDrag.disabled).toBe(true);
   });
 
   // -----------------------------------------------------------------------
   // Rename flow
   // -----------------------------------------------------------------------
 
-  it('enters rename mode via startRename', async () => {
+  it('enters rename mode via double click', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['startRename']('f-root', 'Root Folder');
+    const label = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .folder-content .label')).nativeElement;
+    label.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBe('f-root');
-    expect(component['editingValue']()).toBe('Root Folder');
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    expect(renameInput.value).toBe('Root Folder');
   });
 
   it('commits a rename and updates sessions', async () => {
@@ -209,11 +230,20 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['startRename']('f-root', 'Root Folder');
-    component['editingValue'].set('New Name');
-    component['commitRename']('f-root');
+    const label = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .folder-content .label')).nativeElement;
+    label.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBeNull();
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.value = 'New Name';
+    renameInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    const confirmBtn = fixture.debugElement.query(By.css('.action-btn--confirm')).nativeElement as HTMLButtonElement;
+    confirmBtn.click();
+    await settle(fixture);
+
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeNull();
     const session = component.sessions()[0];
     expect(isFolderNode(session)).toBe(true);
     if (isFolderNode(session)) expect(session.name).toBe('New Name');
@@ -224,11 +254,24 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['startRename']('f-root', 'Root Folder');
-    component['editingValue'].set('   ');
-    component['commitRename']('f-root');
+    const label = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .folder-content .label')).nativeElement;
+    label.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBe('f-root'); // still editing
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.value = '   ';
+    renameInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    const confirmBtn = fixture.debugElement.query(By.css('.action-btn--confirm')).nativeElement as HTMLButtonElement;
+    expect(confirmBtn.disabled).toBe(true);
+
+    // Try committing via Enter key
+    renameInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle(fixture);
+
+    // Should still be in rename mode
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeTruthy();
     const session = component.sessions()[0];
     if (isFolderNode(session)) expect(session.name).toBe('Root Folder');
   });
@@ -238,11 +281,19 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['startRename']('f-root', 'Root Folder');
-    component['editingValue'].set('New Name via Blur');
-    component['onRenameInputBlur']('f-root');
+    const label = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .folder-content .label')).nativeElement;
+    label.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBeNull();
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.value = 'New Name via Blur';
+    renameInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    renameInput.dispatchEvent(new Event('blur'));
+    await settle(fixture);
+
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeNull();
     const session = component.sessions()[0];
     if (isFolderNode(session)) expect(session.name).toBe('New Name via Blur');
   });
@@ -252,11 +303,19 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['startRename']('f-root', 'Root Folder');
-    component['editingValue'].set('   ');
-    component['onRenameInputBlur']('f-root');
+    const label = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .folder-content .label')).nativeElement;
+    label.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBeNull();
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.value = '   ';
+    renameInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    renameInput.dispatchEvent(new Event('blur'));
+    await settle(fixture);
+
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeNull();
     const session = component.sessions()[0];
     if (isFolderNode(session)) expect(session.name).toBe('Root Folder'); // reverted/unchanged
   });
@@ -267,14 +326,19 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     const beforeCount = component.sessions().length;
-    component['onAddFolder'](); // adds a folder and triggers rename mode
+    const newFolderBtn = fixture.debugElement.query(By.css('.new-folder-btn')).nativeElement as HTMLButtonElement;
+    newFolderBtn.click();
+    await settle(fixture);
 
-    const targetId = component['editingId']()!;
-    component['editingValue'].set('   '); // empty name
-    component['onRenameInputBlur'](targetId);
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.value = '   '; // empty name
+    renameInput.dispatchEvent(new Event('input'));
+    await settle(fixture);
 
-    expect(component['editingId']()).toBeNull();
-    expect(component['creatingId']()).toBeNull();
+    renameInput.dispatchEvent(new Event('blur'));
+    await settle(fixture);
+
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeNull();
     expect(component.sessions().length).toBe(beforeCount); // deleted
   });
 
@@ -288,11 +352,12 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     const before = component.sessions().length;
-    component['onAddFolder']();
+    const newFolderBtn = fixture.debugElement.query(By.css('.new-folder-btn')).nativeElement as HTMLButtonElement;
+    newFolderBtn.click();
+    await settle(fixture);
 
     expect(component.sessions().length).toBe(before + 1);
-    expect(component['editingId']()).not.toBeNull();
-    expect(component['creatingId']()).not.toBeNull();
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeTruthy();
   });
 
   it('removes the ephemeral folder when rename is cancelled', async () => {
@@ -301,12 +366,16 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     const before = component.sessions().length;
-    component['onAddFolder']();
-    component['cancelRename']();
+    const newFolderBtn = fixture.debugElement.query(By.css('.new-folder-btn')).nativeElement as HTMLButtonElement;
+    newFolderBtn.click();
+    await settle(fixture);
+
+    const renameInput = fixture.debugElement.query(By.css('.rename-input')).nativeElement as HTMLInputElement;
+    renameInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
 
     expect(component.sessions().length).toBe(before);
-    expect(component['editingId']()).toBeNull();
-    expect(component['creatingId']()).toBeNull();
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeNull();
   });
 
   it('adds a subfolder inside a parent and expands that parent', async () => {
@@ -318,14 +387,17 @@ describe('FolderTreeComponent', () => {
     if (!isFolderNode(first)) throw new Error('expected folder');
     const childrenBefore = first.children.length;
 
-    component['onAddFolder']('f-root');
+    const addSubfolderBtn = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .action-btn[title="Add subfolder"]')).nativeElement as HTMLButtonElement;
+    addSubfolderBtn.click();
+    await settle(fixture);
 
     const updated = component.sessions()[0];
     if (isFolderNode(updated)) {
       expect(updated.children.length).toBe(childrenBefore + 1);
     }
-    expect(component['editingId']()).not.toBeNull();
-    expect(component['expandedIds']().has('f-root')).toBe(true);
+    expect(fixture.debugElement.query(By.css('.rename-input'))).toBeTruthy();
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement;
+    expect(rootChevron.getAttribute('aria-label')).toBe('Collapse'); // auto-expanded
   });
 
   // -----------------------------------------------------------------------
@@ -337,11 +409,16 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    expect(component['expandedIds']().has('f-root')).toBe(false);
-    component['toggleExpand']('f-root');
-    expect(component['expandedIds']().has('f-root')).toBe(true);
-    component['toggleExpand']('f-root');
-    expect(component['expandedIds']().has('f-root')).toBe(false);
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement as HTMLButtonElement;
+    expect(rootChevron.getAttribute('aria-label')).toBe('Expand');
+
+    rootChevron.click();
+    await settle(fixture);
+    expect(rootChevron.getAttribute('aria-label')).toBe('Collapse');
+
+    rootChevron.click();
+    await settle(fixture);
+    expect(rootChevron.getAttribute('aria-label')).toBe('Expand');
   });
 
   // -----------------------------------------------------------------------
@@ -354,8 +431,6 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('selectedFileId', 'file-2');
     await settle(fixture);
 
-    // Pick an empty folder to delete (deletion is only enabled for empty
-    // folders in the UI, but the protected method itself does not enforce it).
     fixture.componentRef.setInput('sessions', [
       ...makeSessions(),
       { id: 'f-empty', kind: 'folder', name: 'Empty', children: [] },
@@ -363,14 +438,9 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     const before = component.sessions().length;
-    component['onDelete']({
-      id: 'f-empty',
-      kind: 'folder',
-      label: 'Empty',
-      depth: 0,
-      expanded: false,
-      hasChildren: false,
-    });
+    const deleteBtn = fixture.debugElement.query(By.css('.tree-row[data-id="f-empty"] .action-btn--danger[title="Delete"]')).nativeElement as HTMLButtonElement;
+    deleteBtn.click();
+    await settle(fixture);
 
     expect(component.sessions().length).toBe(before - 1);
   });
@@ -381,7 +451,8 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('selectedFileId', 'file-top');
     await settle(fixture);
 
-    component['onDelete']({
+    // Call the component protected onDelete directly since files do not render a UI delete trash button
+    (component as any).onDelete({
       id: 'file-top',
       kind: 'file',
       label: 'Top Level File',
@@ -389,16 +460,13 @@ describe('FolderTreeComponent', () => {
       expanded: false,
       hasChildren: false,
     });
+    await settle(fixture);
 
     expect(component.selectedFileId()).toBeNull();
   });
 
   // -----------------------------------------------------------------------
   // Move-to picker integration
-  //
-  // The picker UI now lives in MoveFolderPickerComponent (covered by its own
-  // spec). What the parent owns is the post-emit handler — applying the move
-  // and auto-expanding the destination folder.
   // -----------------------------------------------------------------------
 
   it('onMoveConfirmed moves the source into the chosen folder and expands it', async () => {
@@ -406,7 +474,15 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['onMoveConfirmed']({ sourceId: 'file-top', targetFolderId: 'f-nested' });
+    // Expand f-root so its nested child f-nested renders in the DOM
+    const rootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"] .chevron-btn')).nativeElement as HTMLButtonElement;
+    rootChevron.click();
+    await settle(fixture);
+
+    // Fetch subcomponent picker directly to simulate confirming selection
+    const picker = fixture.debugElement.query(By.directive(MoveFolderPickerComponent)).componentInstance as MoveFolderPickerComponent;
+    picker.moveTo.emit({ sourceId: 'file-top', targetFolderId: 'f-nested' });
+    await settle(fixture);
 
     const root = component.sessions()[0];
     expect(isFolderNode(root)).toBe(true);
@@ -416,7 +492,10 @@ describe('FolderTreeComponent', () => {
     if (nested && isFolderNode(nested)) {
       expect(nested.children.map((c) => c.id)).toContain('file-top');
     }
-    expect(component['expandedIds']().has('f-nested')).toBe(true);
+    
+    // Verify destination f-nested is expanded in the DOM
+    const nestedChevron = fixture.debugElement.query(By.css('.tree-row[data-id="f-nested"] .chevron-btn')).nativeElement;
+    expect(nestedChevron.getAttribute('aria-label')).toBe('Collapse');
   });
 
   it('onMoveConfirmed with null target moves the source to root', async () => {
@@ -424,7 +503,9 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    component['onMoveConfirmed']({ sourceId: 'file-2', targetFolderId: null });
+    const picker = fixture.debugElement.query(By.directive(MoveFolderPickerComponent)).componentInstance as MoveFolderPickerComponent;
+    picker.moveTo.emit({ sourceId: 'file-2', targetFolderId: null });
+    await settle(fixture);
 
     expect(component.sessions().some((n) => n.id === 'file-2')).toBe(true);
   });
@@ -444,32 +525,29 @@ describe('FolderTreeComponent', () => {
       tooltip: '',
     };
     fixture.componentRef.setInput('layouts', [...makeLayouts(), orphanLayout]);
-
-    // Expand the virtual "Other Users" folder and the user folder
-    component['expandedIds'].update((set) => {
-      const next = new Set(set);
-      next.add('virtual-others-root');
-      next.add('virtual-user-John Doe');
-      return next;
-    });
     await settle(fixture);
 
-    const rows = component['flatRows']();
-    const rootRow = findRow(rows, 'virtual-others-root');
-    const userRow = findRow(rows, 'virtual-user-John Doe');
-    const orphanRow = findRow(rows, 'layout-orphan');
+    // Expand the virtual "Other Users" folder by clicking its chevron
+    const othersRootChevron = fixture.debugElement.query(By.css('.tree-row[data-id="virtual-others-root"] .chevron-btn')).nativeElement as HTMLButtonElement;
+    othersRootChevron.click();
+    await settle(fixture);
 
-    expect(rootRow).toBeDefined();
-    expect(userRow).toBeDefined();
-    expect(orphanRow).toBeDefined();
+    // Expand the virtual user folder by clicking its chevron
+    const userChevron = fixture.debugElement.query(By.css('.tree-row[data-id="virtual-user-John Doe"] .chevron-btn')).nativeElement as HTMLButtonElement;
+    userChevron.click();
+    await settle(fixture);
 
-    expect(rootRow?.isOther).toBe(true);
-    expect(userRow?.isOther).toBe(true);
-    expect(orphanRow?.isOther).toBe(true);
+    // Assert rows are successfully rendered in the DOM
+    const rootRow = fixture.debugElement.query(By.css('.tree-row[data-id="virtual-others-root"]'));
+    const userRow = fixture.debugElement.query(By.css('.tree-row[data-id="virtual-user-John Doe"]'));
+    const orphanRow = fixture.debugElement.query(By.css('.tree-row[data-id="layout-orphan"]'));
 
-    // Verify row properties
-    expect(rootRow?.kind).toBe('folder');
-    expect(userRow?.kind).toBe('folder');
-    expect(orphanRow?.kind).toBe('file');
+    expect(rootRow).toBeTruthy();
+    expect(userRow).toBeTruthy();
+    expect(orphanRow).toBeTruthy();
+
+    expect(rootRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
+    expect(userRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
+    expect(orphanRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
   });
 });

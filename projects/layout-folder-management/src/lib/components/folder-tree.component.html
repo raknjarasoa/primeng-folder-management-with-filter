@@ -45,6 +45,7 @@
     @for (row of store.flatRows(); track row.id; let i = $index) {
       <div
         class="tree-row"
+        [attr.data-id]="row.id"
         [class.tree-row--selected]="
           row.kind === 'file' && store.selectedFileId() === row.id
         "
