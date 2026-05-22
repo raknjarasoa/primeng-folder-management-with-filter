@@ -1,7 +1,7 @@
 import {
   CdkDrag,
+  CdkDragEnd,
   CdkDragMove,
-  CdkDragRelease,
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
@@ -321,7 +321,12 @@ export class FolderTreeComponent {
     }
   }
 
-  protected onDragReleased(_event: CdkDragRelease, _sourceRow: FlatRowData): void {
+  // Uses (cdkDragEnded) — fires AFTER the drop animation finishes, so the
+  // source DOM is fully restored and cdkDrag's internal cleanup is done by
+  // the time we mutate `sessions`. Mutating earlier (e.g. on cdkDragReleased)
+  // races with the recycle-view-repeater strategy and produces the
+  // insertBefore / null-context errors observed under cdk-virtual-scroll.
+  protected onDragEnded(_event: CdkDragEnd, _sourceRow: FlatRowData): void {
     const target = this.dropTarget();
     const sourceId = this.draggedRowId;
     this.dropTarget.set(null);
@@ -332,21 +337,15 @@ export class FolderTreeComponent {
     const rows = this.flatRows();
     const { parentId, index } = this.resolveDropTarget(rows, target, sourceId);
 
-    // Defer the mutation to the next macro-task. This gives Angular CDK CdkDrag
-    // time to complete its release cleanup before the virtual scroll viewport
-    // re-renders and recycles DOM rows. Prevents severe visual/logical desyncs.
-    setTimeout(() => {
-      this.moveNode(sourceId, parentId, index);
-      // Expand the new parent so the dropped item is visible
-      if (parentId) {
-        this.expandedIds.update((set) => {
-          if (set.has(parentId)) return set;
-          const next = new Set(set);
-          next.add(parentId);
-          return next;
-        });
-      }
-    });
+    this.moveNode(sourceId, parentId, index);
+    if (parentId) {
+      this.expandedIds.update((set) => {
+        if (set.has(parentId)) return set;
+        const next = new Set(set);
+        next.add(parentId);
+        return next;
+      });
+    }
   }
 
   // Translates a (target row, zone) hit into the (parentId, insert index)

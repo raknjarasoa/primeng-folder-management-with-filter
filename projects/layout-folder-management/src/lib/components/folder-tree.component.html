@@ -1,5 +1,4 @@
 <div class="tree-container">
-
   <!-- Toolbar: Search input and New folder button on one line, same size -->
   <div class="toolbar">
     <div class="search-wrapper">
@@ -44,16 +43,20 @@
     <div
       *cdkVirtualFor="let row of flatRows(); trackBy: trackRowId; let i = index"
       class="tree-row"
-      [class.tree-row--selected]="row.kind === 'file' && selectedFileId() === row.id"
+      [class.tree-row--selected]="
+        row.kind === 'file' && selectedFileId() === row.id
+      "
       [class.tree-row--other]="row.isOther"
-      [class.tree-row--target-into]="dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'"
+      [class.tree-row--target-into]="
+        dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'
+      "
       [style.padding-left.px]="row.depth * INDENT_PX + 4"
       cdkDrag
       [cdkDragDisabled]="!canDrag(row)"
       [cdkDragData]="row"
       (cdkDragStarted)="onDragStarted($event, row)"
       (cdkDragMoved)="onDragMoved($event, row)"
-      (cdkDragReleased)="onDragReleased($event, row)"
+      (cdkDragEnded)="onDragEnded($event, row)"
     >
       @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
         <div class="drop-line drop-line--before"></div>
@@ -169,9 +172,7 @@
   </cdk-virtual-scroll-viewport>
 
   @if (flatRows().length === 0 && isFiltering()) {
-    <div class="empty-state">
-      No results for "{{ filterText() }}"
-    </div>
+    <div class="empty-state">No results for "{{ filterText() }}"</div>
   }
 
   <app-move-folder-picker
@@ -179,5 +180,4 @@
     [sessions]="sessions()"
     (moveTo)="onMoveConfirmed($event)"
   />
-
 </div>
