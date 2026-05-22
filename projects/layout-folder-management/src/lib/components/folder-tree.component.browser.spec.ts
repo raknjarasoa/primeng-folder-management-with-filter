@@ -173,7 +173,7 @@ describe('FolderTreeComponent — browser mode', () => {
     const targetIndex = tree['flatRows']().indexOf(rootFolderRow);
     tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'into' });
 
-    // Trigger Drag End
+    // Trigger Drag Ended
     tree['onDragEnded']({} as any, topFileRow);
 
     fixture.detectChanges();
@@ -195,7 +195,7 @@ describe('FolderTreeComponent — browser mode', () => {
     // Simulate drop target after f-root (which maps parent to null / root)
     tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'after' });
 
-    // Trigger Drag End
+    // Trigger Drag Ended
     tree['onDragEnded']({} as any, file1Row);
 
     fixture.detectChanges();

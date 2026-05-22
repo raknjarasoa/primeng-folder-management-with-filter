@@ -170,11 +170,21 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
-  private autoScrollId: number | null = null;
-  private lastDragEvent: CdkDragMove | null = null;
-  private isDragging = false;
 
+  // Auto-scroll tuning while dragging. The trigger zone is the strip near
+  // each edge of the viewport that, when the pointer enters it, kicks off
+  // the rAF scroll loop. Speed ramps linearly from min (outer boundary) to
+  // max (right at the edge) so the user can throttle by hovering closer or
+  // further from the edge.
+  private readonly AUTO_SCROLL_ZONE_PX = 60;
+  private readonly AUTO_SCROLL_MIN_SPEED = 3;
+  private readonly AUTO_SCROLL_MAX_SPEED = 40;
 
+  // Auto-scroll scratch — only meaningful between drag start and release.
+  private autoScrollRafId: number | null = null;
+  private autoScrollVelocity = 0;
+  private lastPointerY = 0;
+  private viewportRect: DOMRect | null = null;
 
   // ---------------------------------------------------------------------------
   // Lifecycle effects
@@ -200,9 +210,7 @@ export class FolderTreeComponent {
 
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => {
-      if (this.autoScrollId !== null) {
-        cancelAnimationFrame(this.autoScrollId);
-      }
+      this.stopAutoScroll();
     });
   }
 
@@ -239,98 +247,53 @@ export class FolderTreeComponent {
     return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.isFiltering();
   }
 
-  private checkAutoScroll = () => {
-    if (!this.isDragging) {
-      console.log('[Autoscroll] Loop tick: isDragging is false, setting autoScrollId to null and returning');
-      this.autoScrollId = null;
-      return;
-    }
+  private scrollSpeedFor(distToEdge: number): number {
+    const clamped = Math.max(0, Math.min(this.AUTO_SCROLL_ZONE_PX, distToEdge));
+    // 0 at outer edge of zone → 1 right at the viewport edge.
+    const t = 1 - clamped / this.AUTO_SCROLL_ZONE_PX;
+    return (
+      this.AUTO_SCROLL_MIN_SPEED +
+      (this.AUTO_SCROLL_MAX_SPEED - this.AUTO_SCROLL_MIN_SPEED) * t
+    );
+  }
 
-    if (this.lastDragEvent) {
-      const vp = this.viewport();
-      if (vp) {
-        const element = vp.nativeElement;
-        const rect = element.getBoundingClientRect();
-        const pointerY = this.lastDragEvent.pointerPosition.y - rect.top;
-
-        const triggerZone = 60; // 60px trigger zone
-        let speed = 0;
-
-        if (pointerY >= 0 && pointerY < triggerZone) {
-          // Near the top: scroll up. Ramps linearly from 3px to 40px/frame.
-          const ratio = 1 - (pointerY / triggerZone);
-          speed = -(3 + ratio * 37);
-        } else if (pointerY > rect.height - triggerZone && pointerY <= rect.height) {
-          // Near the bottom: scroll down. Ramps linearly from 3px to 40px/frame.
-          const distanceToBottom = rect.height - pointerY;
-          const ratio = 1 - (distanceToBottom / triggerZone);
-          speed = 3 + ratio * 37;
-        }
-
-        console.log('[Autoscroll] Loop tick: pointerY =', pointerY, 'rect.height =', rect.height, 'speed =', speed);
-
-        if (speed !== 0) {
-          element.scrollTop += speed;
-          console.log('[Autoscroll] Scrolled element.scrollTop to:', element.scrollTop);
-          // Re-resolve target under cursor as elements scroll underneath a potentially static mouse
-          this.resolveTargetUnderCursor(this.lastDragEvent);
-        }
-      }
-    } else {
-      console.log('[Autoscroll] Loop tick: lastDragEvent is null');
-    }
-
-    this.autoScrollId = requestAnimationFrame(this.checkAutoScroll);
-  };
-
-  protected onDragStarted(event: CdkDragStart, sourceRow: FlatRowData): void {
-    console.log('[Autoscroll] onDragStarted called for:', sourceRow.id);
-    this.isDragging = true;
-    this.lastDragEvent = null;
-    if (this.autoScrollId !== null) {
-      console.log('[Autoscroll] onDragStarted: autoScrollId not null, cancelling:', this.autoScrollId);
-      cancelAnimationFrame(this.autoScrollId);
-    }
-    this.autoScrollId = requestAnimationFrame(this.checkAutoScroll);
-    console.log('[Autoscroll] onDragStarted: Scheduled checkAutoScroll frame:', this.autoScrollId);
-
-    // Snapshot the source id while the template binding is still trustworthy.
-    this.draggedRowId = sourceRow.id;
-    // Precompute the set of IDs we can't drop into (self + descendants). The
-    // drag handler fires on every pointer move, so this avoids walking the
-    // tree 60×/second.
-    this.dragForbiddenIds = collectSubtreeIds(this.sessions(), sourceRow.id);
-    // Collapse the source folder during drag so its descendants aren't visible
-    // (visually noisy and they're invalid drop targets anyway).
-    if (sourceRow.kind === 'folder' && this.expandedIds().has(sourceRow.id)) {
-      this.expandedIds.update((set) => {
-        const next = new Set(set);
-        next.delete(sourceRow.id);
-        return next;
-      });
+  private setAutoScrollVelocity(v: number): void {
+    this.autoScrollVelocity = v;
+    if (v === 0) {
+      this.stopAutoScroll();
+    } else if (this.autoScrollRafId === null) {
+      this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
     }
   }
 
-  // We resolve the target row from the pointer's Y position + the viewport's
-  // scroll offset, then map that to an index in flatRows.
-  protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
-    console.log('[Autoscroll] onDragMoved called for:', sourceRow.id);
-    this.lastDragEvent = event;
-    this.resolveTargetUnderCursor(event);
+  private autoScrollTick(): void {
+    this.autoScrollRafId = null;
+    const vp = this.viewport();
+    if (!vp || this.autoScrollVelocity === 0) return;
+
+    const element = vp.nativeElement;
+    const currentOffset = element.scrollTop;
+    const nextOffset = Math.max(0, currentOffset + this.autoScrollVelocity);
+    element.scrollTop = nextOffset;
+
+    this.recomputeDropTargetAtPointerY(this.lastPointerY);
+
+    // Keep looping until onDragMoved or onDragReleased zeros the velocity.
+    this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
   }
 
-  private resolveTargetUnderCursor(event: CdkDragMove): void {
+  private stopAutoScroll(): void {
+    if (this.autoScrollRafId !== null) {
+      cancelAnimationFrame(this.autoScrollRafId);
+      this.autoScrollRafId = null;
+    }
+  }
+
+  private recomputeDropTargetAtPointerY(pointerYInViewport: number): void {
     const vp = this.viewport();
     if (!vp) return;
 
     const element = vp.nativeElement;
-    const rect = element.getBoundingClientRect();
-    const pointerYInViewport = event.pointerPosition.y - rect.top;
-    if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
-      this.dropTarget.set(null);
-      return;
-    }
-
     const scrollOffset = element.scrollTop;
     const pointerY = pointerYInViewport + scrollOffset;
     const rowIndex = Math.floor(pointerY / this.ROW_HEIGHT);
@@ -363,27 +326,22 @@ export class FolderTreeComponent {
     }
   }
 
-  protected onDragEnded(_event: CdkDragEnd, _sourceRow: FlatRowData): void {
-    console.log('[Autoscroll] onDragEnded called for:', _sourceRow.id);
-    this.isDragging = false;
-    this.lastDragEvent = null;
-    if (this.autoScrollId !== null) {
-      console.log('[Autoscroll] onDragEnded: autoScrollId not null, cancelling:', this.autoScrollId);
-      cancelAnimationFrame(this.autoScrollId);
-      this.autoScrollId = null;
-    }
-
+  private completePendingDrag(sourceId: string): void {
     const target = this.dropTarget();
-    const sourceId = this.draggedRowId;
-    this.dropTarget.set(null);
-    this.dragForbiddenIds = new Set();
+    this.stopAutoScroll();
+    this.autoScrollVelocity = 0;
     this.draggedRowId = null;
-    if (!target || !sourceId) return;
+    this.dragForbiddenIds = new Set();
+    this.viewportRect = null;
+    this.dropTarget.set(null);
+
+    if (!target) return;
 
     const rows = this.flatRows();
     const { parentId, index } = this.resolveDropTarget(rows, target, sourceId);
 
     this.moveNode(sourceId, parentId, index);
+    // Expand the new parent so the dropped item is visible
     if (parentId) {
       this.expandedIds.update((set) => {
         if (set.has(parentId)) return set;
@@ -391,6 +349,63 @@ export class FolderTreeComponent {
         next.add(parentId);
         return next;
       });
+    }
+  }
+
+  protected onDragStarted(event: CdkDragStart, sourceRow: FlatRowData): void {
+    if (this.draggedRowId !== null) {
+      this.completePendingDrag(this.draggedRowId);
+    }
+    const vp = this.viewport();
+    if (vp) {
+      this.viewportRect = vp.nativeElement.getBoundingClientRect();
+    }
+    // Snapshot the source id while the template binding is still trustworthy.
+    this.draggedRowId = sourceRow.id;
+    // Precompute the set of IDs we can't drop into (self + descendants). The
+    // drag handler fires on every pointer move, so this avoids walking the
+    // tree 60×/second.
+    this.dragForbiddenIds = collectSubtreeIds(this.sessions(), sourceRow.id);
+    // Collapse the source folder during drag so its descendants aren't visible
+    // (visually noisy and they're invalid drop targets anyway).
+    if (sourceRow.kind === 'folder' && this.expandedIds().has(sourceRow.id)) {
+      this.expandedIds.update((set) => {
+        const next = new Set(set);
+        next.delete(sourceRow.id);
+        return next;
+      });
+    }
+  }
+
+  protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
+    const rect = this.viewportRect;
+    if (!rect) return;
+
+    const pointerYInViewport = event.pointerPosition.y - rect.top;
+    if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
+      this.dropTarget.set(null);
+      this.setAutoScrollVelocity(0);
+      return;
+    }
+
+    this.lastPointerY = pointerYInViewport;
+    this.recomputeDropTargetAtPointerY(pointerYInViewport);
+
+    // Auto-scroll: speed ramps toward MAX as the pointer nears the edge.
+    const distFromTop = pointerYInViewport;
+    const distFromBottom = rect.height - pointerYInViewport;
+    let velocity = 0;
+    if (distFromTop < this.AUTO_SCROLL_ZONE_PX) {
+      velocity = -this.scrollSpeedFor(distFromTop);
+    } else if (distFromBottom < this.AUTO_SCROLL_ZONE_PX) {
+      velocity = this.scrollSpeedFor(distFromBottom);
+    }
+    this.setAutoScrollVelocity(velocity);
+  }
+
+  protected onDragEnded(event: CdkDragEnd, sourceRow: FlatRowData): void {
+    if (sourceRow.id === this.draggedRowId) {
+      this.completePendingDrag(sourceRow.id);
     }
   }
 
