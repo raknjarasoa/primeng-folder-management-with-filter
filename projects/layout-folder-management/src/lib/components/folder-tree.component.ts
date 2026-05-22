@@ -1,3 +1,4 @@
+import { SelectionModel } from '@angular/cdk/collections';
 import {
   CdkDrag,
   CdkDragEnd,
@@ -5,10 +6,10 @@ import {
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
+import { CdkTreeModule } from '@angular/cdk/tree';
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   effect,
   ElementRef,
   inject,
@@ -17,6 +18,7 @@ import {
   output,
   untracked,
   viewChild,
+  Signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
@@ -34,7 +36,6 @@ import {
   MoveFolderPickerComponent,
   MoveFolderRequest,
 } from './move-folder-picker.component';
-import { TreeAutoscroller } from './tree-autoscroller';
 
 @Component({
   selector: 'app-folder-tree',
@@ -45,6 +46,7 @@ import { TreeAutoscroller } from './tree-autoscroller';
     FormsModule,
     CdkDrag,
     CdkDropList,
+    CdkTreeModule,
     AutoFocus,
     MoveFolderPickerComponent,
   ],
@@ -68,21 +70,23 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-  private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
+  protected readonly levelAccessor = (node: FlatRowData) => node.depth;
+  protected readonly expansionKey = (node: FlatRowData) => node.id;
+
+  private readonly viewport: Signal<ElementRef<HTMLElement> | undefined> = viewChild('viewport', {
+    read: ElementRef,
+  });
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
+
+  protected readonly fileSelection = new SelectionModel<string>(false);
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
   // ---------------------------------------------------------------------------
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
-
-  private readonly autoscroller = new TreeAutoscroller(
-    () => this.viewport()?.nativeElement,
-    {
-      onScrollTick: (pointerY) => this.recomputeDropTargetAtPointerY(pointerY),
-    },
-  );
+  private lastPointerYInViewport: number | null = null;
+  private viewportRect: DOMRect | null = null;
 
   // ---------------------------------------------------------------------------
   // Backward compatibility getters for unit tests
@@ -160,7 +164,15 @@ export class FolderTreeComponent {
       this.store.setLayouts(this.layouts());
     });
     effect(() => {
-      this.store.setSelectedFileId(this.selectedFileId());
+      const val = this.selectedFileId();
+      untracked(() => {
+        if (val) {
+          this.fileSelection.select(val);
+        } else {
+          this.fileSelection.clear();
+        }
+        this.store.setSelectedFileId(val);
+      });
     });
 
     // Sync store updates back to component models
@@ -175,15 +187,26 @@ export class FolderTreeComponent {
     effect(() => {
       const storeSelectedId = this.store.selectedFileId();
       untracked(() => {
+        if (storeSelectedId) {
+          this.fileSelection.select(storeSelectedId);
+        } else {
+          this.fileSelection.clear();
+        }
         if (this.selectedFileId() !== storeSelectedId) {
           this.selectedFileId.set(storeSelectedId);
         }
       });
     });
 
-    const destroyRef = inject(DestroyRef);
-    destroyRef.onDestroy(() => {
-      this.autoscroller.stop();
+    // Sync fileSelection changes back to selectedFileId signal model and store
+    this.fileSelection.changed.subscribe(change => {
+      const selectedId = change.source.selected[0] || null;
+      if (this.selectedFileId() !== selectedId) {
+        this.selectedFileId.set(selectedId);
+      }
+      if (this.store.selectedFileId() !== selectedId) {
+        this.store.setSelectedFileId(selectedId);
+      }
     });
   }
 
@@ -193,8 +216,7 @@ export class FolderTreeComponent {
 
   protected onRowClick(row: FlatRowData): void {
     if (row.kind === 'file') {
-      this.store.setSelectedFileId(row.id);
-      this.selectedFileId.set(row.id);
+      this.fileSelection.select(row.id);
       this.fileSelected.emit(row.id);
     } else if (row.hasChildren) {
       this.store.toggleExpand(row.id);
@@ -229,7 +251,7 @@ export class FolderTreeComponent {
     const element = vp.nativeElement;
     
     // Clamp the pointer coordinate to valid viewport bounds [0, height - 1] to keep drop targets active at the boundaries
-    const rect = this.autoscroller.getViewportRect();
+    const rect = this.viewportRect;
     const viewportHeight = rect ? rect.height : element.clientHeight;
     const clampedPointerY = Math.max(0, Math.min(viewportHeight - 1, pointerYInViewport));
 
@@ -271,7 +293,8 @@ export class FolderTreeComponent {
    * @param sourceId The ID of the item being dropped.
    */
   private completePendingDrag(sourceId: string): void {
-    this.autoscroller.stop();
+    this.lastPointerYInViewport = null;
+    this.viewportRect = null;
     this.draggedRowId = null;
     this.dragForbiddenIds = new Set();
     this.store.completeDragDrop(sourceId);
@@ -290,7 +313,7 @@ export class FolderTreeComponent {
     }
     const vp = this.viewport();
     if (vp) {
-      this.autoscroller.start(vp.nativeElement);
+      this.viewportRect = vp.nativeElement.getBoundingClientRect();
     }
     this.draggedRowId = sourceRow.id;
     this.dragForbiddenIds = collectSubtreeIds(this.store.sessions(), sourceRow.id);
@@ -306,23 +329,21 @@ export class FolderTreeComponent {
    * @param sourceRow The row metadata being dragged.
    */
   protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
-    const rect = this.autoscroller.getViewportRect();
+    const rect = this.viewportRect;
     if (!rect) return;
 
     const pointerYInViewport = event.pointerPosition.y - rect.top;
     
     // If the pointer goes completely out of bounds (exceeding a generous 30px buffer),
-    // we clear the drop target and pause autoscrolling. We do NOT invoke stop() here
-    // because that would destroy the viewportRect cache needed for future movements.
+    // we clear the drop target.
     const OUT_OF_BOUNDS_BUFFER = 30;
     if (pointerYInViewport < -OUT_OF_BOUNDS_BUFFER || pointerYInViewport > rect.height + OUT_OF_BOUNDS_BUFFER) {
       this.store.setDropTarget(null);
-      this.autoscroller.pause();
       return;
     }
 
+    this.lastPointerYInViewport = pointerYInViewport;
     this.recomputeDropTargetAtPointerY(pointerYInViewport);
-    this.autoscroller.move(pointerYInViewport);
   }
 
   /**
@@ -334,6 +355,16 @@ export class FolderTreeComponent {
   protected onDragEnded(event: CdkDragEnd, sourceRow: FlatRowData): void {
     if (sourceRow.id === this.draggedRowId) {
       this.completePendingDrag(sourceRow.id);
+    }
+  }
+
+  /**
+   * Fired when the viewport container scrolls. Updates drop zone logic
+   * while dragging.
+   */
+  protected onViewportScroll(event: Event): void {
+    if (this.draggedRowId !== null && this.lastPointerYInViewport !== null) {
+      this.recomputeDropTargetAtPointerY(this.lastPointerYInViewport);
     }
   }
 
