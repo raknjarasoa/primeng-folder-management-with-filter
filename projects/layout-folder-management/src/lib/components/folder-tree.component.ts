@@ -6,7 +6,6 @@ import {
   CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
-import { TooltipModule } from 'primeng/tooltip';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -16,7 +15,6 @@ import {
   effect,
   inject,
   input,
-  linkedSignal,
   model,
   output,
   signal,
@@ -34,9 +32,6 @@ import {
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
 import {
-  OrphanGroups,
-  OTHERS_ROOT_ID,
-  OTHERS_USER_PREFIX,
   addFolder,
   collectAncestorIds,
   collectSessionFileIds,
@@ -45,6 +40,9 @@ import {
   groupOrphanLayouts,
   insertNode,
   isAncestorOrSelf,
+  OrphanGroups,
+  OTHERS_ROOT_ID,
+  OTHERS_USER_PREFIX,
   removeNode,
   renameFolder,
 } from '../store/tree-helpers';
@@ -70,7 +68,6 @@ type DropTarget = {
     CdkDropList,
     AutoFocus,
     MoveFolderPickerComponent,
-    TooltipModule,
   ],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
@@ -81,30 +78,23 @@ export class FolderTreeComponent {
   layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
 
-  protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
-
-  // Fires on every file-row click, including re-clicks of the currently
-  // selected file (where `selectedFileId` would not emit because the value
-  // didn't change).
   fileSelected = output<string>();
+
+  protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
 
   // Must match the row CSS height. CDK virtual scroll places rows by index *
   // ROW_HEIGHT; if these diverge you'll see overlap or gaps.
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-
-
   // ---------------------------------------------------------------------------
   // UI state
   // ---------------------------------------------------------------------------
-
-
   protected readonly filterText = signal<string>('');
   protected readonly editingId = signal<string | null>(null);
   protected readonly editingValue = signal<string>('');
-  protected readonly creatingId = signal<string | null>(null);
-  protected readonly expandedIds = signal<ReadonlySet<string>>(new Set());
+  private readonly creatingId = signal<string | null>(null);
+  private readonly expandedIds = signal<ReadonlySet<string>>(new Set());
 
   protected readonly debouncedFilterText = toSignal<string, string>(
     toObservable(this.filterText).pipe(debounceTime(300)),
@@ -118,12 +108,9 @@ export class FolderTreeComponent {
   protected readonly dropTarget = signal<DropTarget | null>(null);
 
   // Tracks layout ids we've deleted locally so they don't reappear under
-  // "Others" while the parent's `layouts` input still contains them. Resets
-  // automatically when the parent emits a new layouts array.
-  private readonly suppressedLayoutIds = linkedSignal<LayoutInstance[], ReadonlySet<string>>({
-    source: this.layouts,
-    computation: () => new Set<string>(),
-  });
+  // "Others" while the parent's `layouts` input still contains them. Because
+  // the component is destroyed on popover close, this naturally resets on open.
+  private readonly suppressedLayoutIds = signal<ReadonlySet<string>>(new Set());
 
   // ---------------------------------------------------------------------------
   // Derived state
@@ -133,7 +120,9 @@ export class FolderTreeComponent {
     const suppressed = this.suppressedLayoutIds();
     const out: Record<string, LayoutInstance> = {};
     for (const l of this.layouts()) {
-      if (!suppressed.has(l.id)) out[l.id] = l;
+      if (!suppressed.has(l.id)) {
+        out[l.id] = l;
+      }
     }
     return out;
   });
@@ -198,21 +187,16 @@ export class FolderTreeComponent {
   // Lifecycle effects
   // ---------------------------------------------------------------------------
 
-  // Tracks which selection id we've already auto-expanded ancestors for.
-  // Without it the effect below would re-expand on every unrelated recompute
-  // (e.g. sessions change), undoing manual collapses the user just made.
-  private lastSelectedSeen: string | null | undefined = undefined;
-
   constructor() {
-    // Auto-expand ancestors of the selected file whenever the selection itself
-    // changes (not on every dependent recompute — see lastSelectedSeen).
+    // Auto-expand ancestors of the selected file whenever the selection itself changes.
+    // By keeping the ancestors lookup inside untracked, we isolate the reactive dependency
+    // to selectedFileId and prevent subsequent tree updates from undoing manual collapses.
     effect(() => {
       const selectedId = this.selectedFileId();
-      const ancestors = this.selectedFileAncestors();
+      if (!selectedId) return;
       untracked(() => {
-        if (this.lastSelectedSeen === selectedId) return;
-        this.lastSelectedSeen = selectedId;
-        if (!selectedId || ancestors.length === 0) return;
+        const ancestors = this.selectedFileAncestors();
+        if (ancestors.length === 0) return;
         this.expandedIds.update((set) => {
           const next = new Set(set);
           for (const a of ancestors) next.add(a);
