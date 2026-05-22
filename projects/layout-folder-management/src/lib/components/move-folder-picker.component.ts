@@ -44,6 +44,10 @@ export class MoveFolderPickerComponent {
   protected readonly movingRowKind = signal<'file' | 'folder' | null>(null);
   protected readonly moveFilterText = signal<string>('');
 
+  /**
+   * Evaluates all folders available to host the item, excluding the item's
+   * own subtree (in case of a folder) to prevent self-nesting cycles.
+   */
   protected readonly moveCandidates = computed<FolderOption[]>(() => {
     const sourceId = this.movingRowId();
     if (!sourceId) return [];
@@ -51,6 +55,9 @@ export class MoveFolderPickerComponent {
     return flattenFolders(this.sessions(), exclude);
   });
 
+  /**
+   * Filters the available relocation candidate folders by the current search text query.
+   */
   protected readonly filteredMoveCandidates = computed<FolderOption[]>(() => {
     const q = this.moveFilterText().trim().toLowerCase();
     const all = this.moveCandidates();
@@ -60,6 +67,12 @@ export class MoveFolderPickerComponent {
 
   private readonly popover = viewChild<Popover>('popover');
 
+  /**
+   * Displays the move picker popover next to the triggering DOM element.
+   * 
+   * @param row The flat row metadata being relocated.
+   * @param event The DOM event triggering the popover.
+   */
   open(row: FlatRowData, event: Event): void {
     this.movingRowId.set(row.id);
     this.movingRowLabel.set(row.label);
@@ -68,6 +81,11 @@ export class MoveFolderPickerComponent {
     this.popover()?.toggle(event);
   }
 
+  /**
+   * Confirms selection and emits the moveTo event.
+   * 
+   * @param targetFolderId The chosen host parent folder, or null for root level.
+   */
   protected confirm(targetFolderId: string | null): void {
     const sourceId = this.movingRowId();
     this.resetState();
@@ -76,10 +94,16 @@ export class MoveFolderPickerComponent {
     this.moveTo.emit({ sourceId, targetFolderId });
   }
 
+  /**
+   * Event hook when the popover gets closed/hidden.
+   */
   protected onHide(): void {
     this.resetState();
   }
 
+  /**
+   * Resets active component states to prevent memory leaks or mismatched UI overlays.
+   */
   private resetState(): void {
     this.movingRowId.set(null);
     this.movingRowLabel.set(null);

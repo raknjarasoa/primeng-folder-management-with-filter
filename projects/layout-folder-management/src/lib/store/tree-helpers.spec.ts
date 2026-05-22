@@ -8,6 +8,7 @@ import {
   renameFolder,
   addFolder,
   collectAncestorIds,
+  resolveDropTarget,
 } from './tree-helpers';
 
 // ---------------------------------------------------------------------------
@@ -292,5 +293,55 @@ describe('collectAncestorIds', () => {
   it('returns null for a missing id', () => {
     const ancestors = collectAncestorIds(forest, 'missing');
     expect(ancestors).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveDropTarget
+// ---------------------------------------------------------------------------
+
+describe('resolveDropTarget', () => {
+  const flatRows = [
+    { id: 'f-root', kind: 'folder', label: 'Root Folder', depth: 0, expanded: true, hasChildren: true },
+    { id: 'file-1', kind: 'file', label: 'File 1', depth: 1, expanded: false, hasChildren: false },
+    { id: 'f-nested', kind: 'folder', label: 'Nested', depth: 1, expanded: true, hasChildren: true },
+    { id: 'file-2', kind: 'file', label: 'File 2', depth: 2, expanded: false, hasChildren: false },
+    { id: 'file-3', kind: 'file', label: 'File 3', depth: 2, expanded: false, hasChildren: false },
+    { id: 'file-top', kind: 'file', label: 'Top Level File', depth: 0, expanded: false, hasChildren: false },
+  ] as any[];
+
+  it('resolves drop into a folder correctly', () => {
+    const res = resolveDropTarget(flatRows, { rowIndex: 0, zone: 'into' }, 'file-top');
+    expect(res).toEqual({ parentId: 'f-root', index: 0 });
+  });
+
+  it('resolves drop before a nested row correctly', () => {
+    // Drop before f-nested (index 2)
+    const res = resolveDropTarget(flatRows, { rowIndex: 2, zone: 'before' }, 'file-top');
+    expect(res).toEqual({ parentId: 'f-root', index: 1 });
+  });
+
+  it('resolves drop after a nested row correctly', () => {
+    // Drop after file-1 (index 1)
+    const res = resolveDropTarget(flatRows, { rowIndex: 1, zone: 'after' }, 'file-top');
+    expect(res).toEqual({ parentId: 'f-root', index: 1 });
+  });
+
+  it('resolves drop with source row sibling exclusion correctly', () => {
+    // Drop after file-3 (index 4), but the source is file-2 (index 3).
+    // Sibling before at same depth: file-2 (source, excluded) and file-3.
+    // If source file-2 is moved, it shouldn't count as a preceding sibling when dragging downward after file-3.
+    const res = resolveDropTarget(flatRows, { rowIndex: 4, zone: 'after' }, 'file-2');
+    expect(res).toEqual({ parentId: 'f-nested', index: 1 });
+  });
+
+  it('resolves drop at root level before a folder correctly', () => {
+    const res = resolveDropTarget(flatRows, { rowIndex: 0, zone: 'before' }, 'file-top');
+    expect(res).toEqual({ parentId: null, index: 0 });
+  });
+
+  it('resolves drop at root level after a folder correctly', () => {
+    const res = resolveDropTarget(flatRows, { rowIndex: 0, zone: 'after' }, 'file-top');
+    expect(res).toEqual({ parentId: null, index: 1 });
   });
 });

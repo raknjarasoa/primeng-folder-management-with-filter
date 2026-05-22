@@ -14,8 +14,10 @@ type FileNode = {
 
 export type TreeItem = FolderNode | FileNode;
 
-// A single visible row in the flattened tree consumed by cdk-virtual-scroll.
-// Produced by flattenSessions() in tree-helpers.
+/**
+ * Represents a single visible row in the flattened tree structure consumed by cdk-virtual-scroll.
+ * Produced by flattenSessions() in tree-helpers.ts.
+ */
 export type FlatRowData = {
   id: string;
   kind: 'folder' | 'file';

@@ -35,6 +35,8 @@ import {
   collectAncestorIds,
   collectSessionFileIds,
   collectSubtreeIds,
+  DropTarget,
+  DropZone,
   flattenSessions,
   groupOrphanLayouts,
   insertNode,
@@ -44,17 +46,14 @@ import {
   OTHERS_USER_PREFIX,
   removeNode,
   renameFolder,
+  resolveDropTarget,
 } from '../store/tree-helpers';
 import {
   MoveFolderPickerComponent,
   MoveFolderRequest,
 } from './move-folder-picker.component';
+import { TreeAutoscroller } from './tree-autoscroller';
 
-type DropZone = 'before' | 'into' | 'after';
-type DropTarget = {
-  rowIndex: number;
-  zone: DropZone;
-};
 
 @Component({
   selector: 'app-folder-tree',
@@ -171,20 +170,12 @@ export class FolderTreeComponent {
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
 
-  // Auto-scroll tuning while dragging. The trigger zone is the strip near
-  // each edge of the viewport that, when the pointer enters it, kicks off
-  // the rAF scroll loop. Speed ramps linearly from min (outer boundary) to
-  // max (right at the edge) so the user can throttle by hovering closer or
-  // further from the edge.
-  private readonly AUTO_SCROLL_ZONE_PX = 60;
-  private readonly AUTO_SCROLL_MIN_SPEED = 3;
-  private readonly AUTO_SCROLL_MAX_SPEED = 40;
-
-  // Auto-scroll scratch — only meaningful between drag start and release.
-  private autoScrollRafId: number | null = null;
-  private autoScrollVelocity = 0;
-  private lastPointerY = 0;
-  private viewportRect: DOMRect | null = null;
+  private readonly autoscroller = new TreeAutoscroller(
+    () => this.viewport()?.nativeElement,
+    {
+      onScrollTick: (pointerY) => this.recomputeDropTargetAtPointerY(pointerY),
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Lifecycle effects
@@ -210,7 +201,7 @@ export class FolderTreeComponent {
 
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => {
-      this.stopAutoScroll();
+      this.autoscroller.stop();
     });
   }
 
@@ -247,48 +238,12 @@ export class FolderTreeComponent {
     return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.isFiltering();
   }
 
-  private scrollSpeedFor(distToEdge: number): number {
-    const clamped = Math.max(0, Math.min(this.AUTO_SCROLL_ZONE_PX, distToEdge));
-    // 0 at outer edge of zone → 1 right at the viewport edge.
-    const t = 1 - clamped / this.AUTO_SCROLL_ZONE_PX;
-    return (
-      this.AUTO_SCROLL_MIN_SPEED +
-      (this.AUTO_SCROLL_MAX_SPEED - this.AUTO_SCROLL_MIN_SPEED) * t
-    );
-  }
-
-  private setAutoScrollVelocity(v: number): void {
-    this.autoScrollVelocity = v;
-    if (v === 0) {
-      this.stopAutoScroll();
-    } else if (this.autoScrollRafId === null) {
-      this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
-    }
-  }
-
-  private autoScrollTick(): void {
-    this.autoScrollRafId = null;
-    const vp = this.viewport();
-    if (!vp || this.autoScrollVelocity === 0) return;
-
-    const element = vp.nativeElement;
-    const currentOffset = element.scrollTop;
-    const nextOffset = Math.max(0, currentOffset + this.autoScrollVelocity);
-    element.scrollTop = nextOffset;
-
-    this.recomputeDropTargetAtPointerY(this.lastPointerY);
-
-    // Keep looping until onDragMoved or onDragReleased zeros the velocity.
-    this.autoScrollRafId = requestAnimationFrame(() => this.autoScrollTick());
-  }
-
-  private stopAutoScroll(): void {
-    if (this.autoScrollRafId !== null) {
-      cancelAnimationFrame(this.autoScrollRafId);
-      this.autoScrollRafId = null;
-    }
-  }
-
+  /**
+   * Finds the drop target index and sub-zone under the cursor coordinates relative to the viewport.
+   * Updates dropTarget signal.
+   * 
+   * @param pointerYInViewport The mouse/pointer pointer coordinate.
+   */
   private recomputeDropTargetAtPointerY(pointerYInViewport: number): void {
     const vp = this.viewport();
     if (!vp) return;
@@ -326,19 +281,22 @@ export class FolderTreeComponent {
     }
   }
 
+  /**
+   * Performs the mutation on structural drop confirmation and stops autoscrolling.
+   * 
+   * @param sourceId The ID of the item being dropped.
+   */
   private completePendingDrag(sourceId: string): void {
     const target = this.dropTarget();
-    this.stopAutoScroll();
-    this.autoScrollVelocity = 0;
+    this.autoscroller.stop();
     this.draggedRowId = null;
     this.dragForbiddenIds = new Set();
-    this.viewportRect = null;
     this.dropTarget.set(null);
 
     if (!target) return;
 
     const rows = this.flatRows();
-    const { parentId, index } = this.resolveDropTarget(rows, target, sourceId);
+    const { parentId, index } = resolveDropTarget(rows, target, sourceId);
 
     this.moveNode(sourceId, parentId, index);
     // Expand the new parent so the dropped item is visible
@@ -352,13 +310,19 @@ export class FolderTreeComponent {
     }
   }
 
+  /**
+   * Fired when a CDK drag session begins. Initializes tracking bounds, prevents self-loops.
+   * 
+   * @param event The CDK drag start event.
+   * @param sourceRow The metadata of the item being dragged.
+   */
   protected onDragStarted(event: CdkDragStart, sourceRow: FlatRowData): void {
     if (this.draggedRowId !== null) {
       this.completePendingDrag(this.draggedRowId);
     }
     const vp = this.viewport();
     if (vp) {
-      this.viewportRect = vp.nativeElement.getBoundingClientRect();
+      this.autoscroller.start(vp.nativeElement);
     }
     // Snapshot the source id while the template binding is still trustworthy.
     this.draggedRowId = sourceRow.id;
@@ -377,68 +341,37 @@ export class FolderTreeComponent {
     }
   }
 
+  /**
+   * Fired continually during the drag move lifecycle.
+   * 
+   * @param event The CDK drag move event.
+   * @param sourceRow The row metadata being dragged.
+   */
   protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
-    const rect = this.viewportRect;
+    const rect = this.autoscroller.getViewportRect();
     if (!rect) return;
 
     const pointerYInViewport = event.pointerPosition.y - rect.top;
     if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
       this.dropTarget.set(null);
-      this.setAutoScrollVelocity(0);
+      this.autoscroller.stop();
       return;
     }
 
-    this.lastPointerY = pointerYInViewport;
     this.recomputeDropTargetAtPointerY(pointerYInViewport);
-
-    // Auto-scroll: speed ramps toward MAX as the pointer nears the edge.
-    const distFromTop = pointerYInViewport;
-    const distFromBottom = rect.height - pointerYInViewport;
-    let velocity = 0;
-    if (distFromTop < this.AUTO_SCROLL_ZONE_PX) {
-      velocity = -this.scrollSpeedFor(distFromTop);
-    } else if (distFromBottom < this.AUTO_SCROLL_ZONE_PX) {
-      velocity = this.scrollSpeedFor(distFromBottom);
-    }
-    this.setAutoScrollVelocity(velocity);
+    this.autoscroller.move(pointerYInViewport);
   }
 
+  /**
+   * Fired when the drag drops or finishes.
+   * 
+   * @param event The CDK drag end event.
+   * @param sourceRow The row metadata that was dragged.
+   */
   protected onDragEnded(event: CdkDragEnd, sourceRow: FlatRowData): void {
     if (sourceRow.id === this.draggedRowId) {
       this.completePendingDrag(sourceRow.id);
     }
-  }
-
-  // Translates a (target row, zone) hit into the (parentId, insert index)
-  // shape that moveNode expects. The source is excluded from the sibling count
-  // because moveNode removes it before inserting — otherwise same-parent
-  // downward drags would land one slot too far.
-  private resolveDropTarget(
-    rows: FlatRowData[],
-    target: DropTarget,
-    sourceId: string,
-  ): { parentId: string | null; index: number } {
-    const targetRow = rows[target.rowIndex];
-
-    if (target.zone === 'into') {
-      return { parentId: targetRow.id, index: 0 };
-    }
-
-    let parentId: string | null = null;
-    let siblingsBefore = 0;
-    for (let i = target.rowIndex - 1; i >= 0; i--) {
-      const row = rows[i];
-      if (row.depth < targetRow.depth) {
-        parentId = row.id;
-        break;
-      }
-      if (row.depth === targetRow.depth && row.id !== sourceId) siblingsBefore++;
-    }
-
-    return {
-      parentId,
-      index: target.zone === 'before' ? siblingsBefore : siblingsBefore + 1,
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -453,6 +386,12 @@ export class FolderTreeComponent {
   // Add / rename / delete
   // ---------------------------------------------------------------------------
 
+  /**
+   * Triggered when creating a new folder in the directory tree.
+   * Automatically unfolds parent structures and launches edit mode.
+   * 
+   * @param parentId The parent ID to insert under, or null for root level.
+   */
   protected onAddFolder(parentId: string | null = null): void {
     const { forest, newId } = addFolder(this.sessions(), parentId, '');
     this.sessions.set(forest);
@@ -468,11 +407,22 @@ export class FolderTreeComponent {
     this.startRename(newId, '');
   }
 
+  /**
+   * Initiates edit mode on a folder's label name.
+   * 
+   * @param id Unique identifier of the folder to rename.
+   * @param currentLabel Current name of the folder.
+   */
   protected startRename(id: string, currentLabel: string): void {
     this.editingId.set(id);
     this.editingValue.set(currentLabel);
   }
 
+  /**
+   * Saves the edit name mutation and leaves edit mode.
+   * 
+   * @param id The folder being renamed.
+   */
   protected commitRename(id: string): void {
     const value = this.editingValue().trim();
     if (this.editingId() !== id || !value) return;
@@ -482,6 +432,9 @@ export class FolderTreeComponent {
     this.creatingId.set(null);
   }
 
+  /**
+   * Cancels any active folder rename session. Removes newly created empty folders.
+   */
   protected cancelRename(): void {
     const targetId = this.editingId();
     if (targetId && targetId === this.creatingId()) {
@@ -491,6 +444,11 @@ export class FolderTreeComponent {
     this.creatingId.set(null);
   }
 
+  /**
+   * Handles the text input blur event when renaming a folder.
+   * 
+   * @param id Unique folder ID.
+   */
   protected onRenameInputBlur(id: string): void {
     const value = this.editingValue().trim();
     if (value) {
@@ -500,6 +458,11 @@ export class FolderTreeComponent {
     }
   }
 
+  /**
+   * Deletes a folder or file row from the tree.
+   * 
+   * @param row Metadata of the row to remove.
+   */
   protected onDelete(row: FlatRowData): void {
     if (this.editingId() === row.id) {
       this.editingId.set(null);
@@ -512,10 +475,21 @@ export class FolderTreeComponent {
   // Move-to picker
   // ---------------------------------------------------------------------------
 
+  /**
+   * Opens the destination folder selector popover menu.
+   * 
+   * @param row The row model to relocate.
+   * @param event The mouse click event.
+   */
   protected openMovePicker(row: FlatRowData, event: Event): void {
     this.movePicker()?.open(row, event);
   }
 
+  /**
+   * Triggered upon confirming destination target inside the move popover dialog.
+   * 
+   * @param request Payload containing source ID and target host ID.
+   */
   protected onMoveConfirmed({ sourceId, targetFolderId }: MoveFolderRequest): void {
     this.moveNode(sourceId, targetFolderId, 0);
     if (targetFolderId) {
@@ -532,6 +506,13 @@ export class FolderTreeComponent {
   // Tree mutations — all immutable, just orchestrations over tree-helpers.
   // ---------------------------------------------------------------------------
 
+  /**
+   * Immutably processes structural moving operations in the directory model.
+   * 
+   * @param draggedId The ID of the item being moved.
+   * @param targetFolderId The parent folder ID target, or null for root level.
+   * @param index Insertion sibling index.
+   */
   private moveNode(draggedId: string, targetFolderId: string | null, index?: number): void {
     const current = this.sessions();
     // Reject drops that would create a cycle. The drag UI already filters
@@ -542,6 +523,11 @@ export class FolderTreeComponent {
     this.sessions.set(insertNode(without, removed, targetFolderId, index));
   }
 
+  /**
+   * Immutably processes node deletions.
+   * 
+   * @param id Unique folder or file ID to remove.
+   */
   private deleteNode(id: string): void {
     const { forest } = removeNode(this.sessions(), id);
     this.sessions.set(forest);
