@@ -81,6 +81,8 @@ export class FolderTreeComponent {
   layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
 
+  protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
+
   // Fires on every file-row click, including re-clicks of the currently
   // selected file (where `selectedFileId` would not emit because the value
   // didn't change).

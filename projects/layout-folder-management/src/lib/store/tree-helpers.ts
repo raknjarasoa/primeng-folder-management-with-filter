@@ -234,8 +234,8 @@ export function flattenFolders(
 // NOT done here — pass it in precomputed via `orphanGroups`. The caller is
 // expected to wrap this in a memoised computed signal so we don't re-iterate
 // the entire `layoutsById` set on every expand/collapse or filter change.
-export const OTHERS_ROOT_ID = 'others-root';
-export const OTHERS_USER_PREFIX = 'others-';
+export const OTHERS_ROOT_ID = 'virtual-others-root';
+export const OTHERS_USER_PREFIX = 'virtual-user-';
 
 export type OrphanGroups = {
   othersByUsername: Record<string, LayoutInstance[]>;

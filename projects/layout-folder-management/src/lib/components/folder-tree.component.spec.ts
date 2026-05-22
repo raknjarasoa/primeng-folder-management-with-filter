@@ -448,15 +448,15 @@ describe('FolderTreeComponent', () => {
     // Expand the virtual "Other Users" folder and the user folder
     component['expandedIds'].update((set) => {
       const next = new Set(set);
-      next.add('others-root');
-      next.add('others-John Doe');
+      next.add('virtual-others-root');
+      next.add('virtual-user-John Doe');
       return next;
     });
     await settle(fixture);
 
     const rows = component['flatRows']();
-    const rootRow = findRow(rows, 'others-root');
-    const userRow = findRow(rows, 'others-John Doe');
+    const rootRow = findRow(rows, 'virtual-others-root');
+    const userRow = findRow(rows, 'virtual-user-John Doe');
     const orphanRow = findRow(rows, 'layout-orphan');
 
     expect(rootRow).toBeDefined();
