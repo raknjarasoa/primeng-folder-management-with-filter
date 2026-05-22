@@ -33,7 +33,7 @@ function makeLayouts(): LayoutInstance[] {
 }
 
 describe('FolderTreeStore', () => {
-  let store: InstanceType<typeof FolderTreeStore>;
+  let store: FolderTreeStore;
 
   beforeEach(() => {
     TestBed.configureTestingModule({

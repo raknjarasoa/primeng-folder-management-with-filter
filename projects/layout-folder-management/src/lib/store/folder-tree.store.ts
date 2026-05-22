@@ -286,3 +286,5 @@ export const FolderTreeStore = signalStore(
     },
   })
 );
+
+export type FolderTreeStore = InstanceType<typeof FolderTreeStore>;
