@@ -155,4 +155,54 @@ describe('FolderTreeComponent — browser mode', () => {
       .element(page.getByRole('button', { name: /new folder/i }))
       .toBeDisabled();
   });
+
+  it('handles consecutive drag and drop operations successfully', async () => {
+    // We simulate consecutive drag-drop operations programmatically.
+    // Pixel-perfect pointer drag simulation is highly flaky in headless environments
+    // with custom scroll/coordinate offset hit testing.
+    const tree = fixture.componentInstance;
+
+    // First drag: move file-top into f-root
+    const rootFolderRow = tree['flatRows']().find((r) => r.id === 'f-root')!;
+    const topFileRow = tree['flatRows']().find((r) => r.id === 'file-top')!;
+
+    // Trigger Drag Start
+    tree['onDragStarted']({} as any, topFileRow);
+
+    // Simulate move by setting drop target on Root Folder (rowIndex is its index, zone is 'into')
+    const targetIndex = tree['flatRows']().indexOf(rootFolderRow);
+    tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'into' });
+
+    // Trigger Drag End
+    tree['onDragEnded']({} as any, topFileRow);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Verify file-top is now a child of f-root
+    const sessions = tree.sessions();
+    const updatedRoot = sessions.find((n) => n.id === 'f-root')!;
+    expect(updatedRoot.children?.some((c) => c.id === 'file-top')).toBe(true);
+
+    // Second drag: move file-1 (which is inside f-root) to top level after root folder
+    // Since f-root was expanded upon dropping file-top, file-1 is in flatRows
+    const file1Row = tree['flatRows']().find((r) => r.id === 'file-1')!;
+    
+    // Trigger Drag Start
+    tree['onDragStarted']({} as any, file1Row);
+
+    // Simulate drop target after f-root (which maps parent to null / root)
+    tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'after' });
+
+    // Trigger Drag End
+    tree['onDragEnded']({} as any, file1Row);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Verify file-1 is now at root level
+    expect(tree.sessions().some((n) => n.id === 'file-1')).toBe(true);
+  });
 });

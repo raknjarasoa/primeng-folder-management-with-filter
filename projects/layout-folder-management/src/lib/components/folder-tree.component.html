@@ -32,144 +32,146 @@
     </button>
   </div>
 
-  <cdk-virtual-scroll-viewport
+  <div
+    #viewport
     cdkDropList
     [cdkDropListSortingDisabled]="true"
+    [cdkDropListAutoScrollDisabled]="true"
     class="tree-viewport"
     [class.tree-viewport--empty]="flatRows().length === 0"
-    [itemSize]="ROW_HEIGHT"
     [style.--row-count]="flatRows().length"
   >
-    <div
-      *cdkVirtualFor="let row of flatRows(); trackBy: trackRowId; let i = index"
-      class="tree-row"
-      [class.tree-row--selected]="
-        row.kind === 'file' && selectedFileId() === row.id
-      "
-      [class.tree-row--other]="row.isOther"
-      [class.tree-row--target-into]="
-        dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'
-      "
-      [style.padding-left.px]="row.depth * INDENT_PX + 4"
-      cdkDrag
-      [cdkDragDisabled]="!canDrag(row)"
-      [cdkDragData]="row"
-      (cdkDragStarted)="onDragStarted($event, row)"
-      (cdkDragMoved)="onDragMoved($event, row)"
-      (cdkDragEnded)="onDragEnded($event, row)"
-    >
-      @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
-        <div class="drop-line drop-line--before"></div>
-      }
-      @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'after') {
-        <div class="drop-line drop-line--after"></div>
-      }
-
-      @if (row.hasChildren) {
-        <button
-          type="button"
-          class="chevron-btn"
-          (click)="toggleExpand(row.id, $event)"
-          [attr.aria-label]="row.expanded ? 'Collapse' : 'Expand'"
-        >
-          <i
-            class="fas"
-            [class.fa-chevron-down]="row.expanded"
-            [class.fa-chevron-right]="!row.expanded"
-          ></i>
-        </button>
-      } @else {
-        <span class="chevron-spacer"></span>
-      }
-
-      @if (row.kind === 'file') {
-        <div class="file-content" (click)="onRowClick(row)">
-          <i class="fas fa-file row-icon"></i>
-          <span class="label">{{ row.label }}</span>
-        </div>
-      } @else if (editingId() === row.id) {
-        <i class="fas fa-folder row-icon"></i>
-        <input
-          type="text"
-          class="rename-input"
-          [pAutoFocus]="true"
-          [(ngModel)]="editingValue"
-          (keydown.enter)="commitRename(row.id)"
-          (keydown.escape)="cancelRename()"
-          (blur)="onRenameInputBlur(row.id)"
-          (click)="$event.stopPropagation()"
-        />
-        <button
-          type="button"
-          class="action-btn action-btn--confirm"
-          title="Confirm"
-          [disabled]="!editingValue().trim()"
-          (click)="commitRename(row.id); $event.stopPropagation()"
-        >
-          <i class="fas fa-check"></i>
-        </button>
-      } @else {
-        <div class="folder-content">
-          <i
-            class="fas row-icon"
-            [class.fa-user]="row.isOther && row.id !== OTHERS_ROOT_ID"
-            [class.fa-folder]="!row.isOther || row.id === OTHERS_ROOT_ID"
-          ></i>
-          <span
-            class="label"
-            (dblclick)="!row.isOther && startRename(row.id, row.label)"
-          >
-            {{ row.label }}
-          </span>
-        </div>
-      }
-
-      <span class="actions">
-        @if (!row.isOther && editingId() !== row.id) {
-          <button
-            type="button"
-            class="action-btn"
-            title="Move to…"
-            [disabled]="editingId() !== null"
-            (click)="openMovePicker(row, $event); $event.stopPropagation()"
-          >
-            <i class="fas fa-arrow-right-from-bracket"></i>
-          </button>
+    @for (row of flatRows(); track row.id; let i = $index) {
+      <div
+        class="tree-row"
+        [class.tree-row--selected]="
+          row.kind === 'file' && selectedFileId() === row.id
+        "
+        [class.tree-row--other]="row.isOther"
+        [class.tree-row--target-into]="
+          dropTarget()?.rowIndex === i && dropTarget()?.zone === 'into'
+        "
+        [style.padding-left.px]="row.depth * INDENT_PX + 4"
+        cdkDrag
+        [cdkDragDisabled]="!canDrag(row)"
+        [cdkDragData]="row"
+        (cdkDragStarted)="onDragStarted($event, row)"
+        (cdkDragMoved)="onDragMoved($event, row)"
+        (cdkDragEnded)="onDragEnded($event, row)"
+      >
+        @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'before') {
+          <div class="drop-line drop-line--before"></div>
         }
-        @if (row.kind === 'folder' && editingId() !== row.id && !row.isOther) {
-          <button
-            type="button"
-            class="action-btn"
-            title="Add subfolder"
-            [disabled]="editingId() !== null || isFiltering()"
-            (click)="onAddFolder(row.id); $event.stopPropagation()"
-          >
-            <i class="fas fa-folder-plus"></i>
-          </button>
-          <button
-            type="button"
-            class="action-btn"
-            title="Rename"
-            [disabled]="isFiltering()"
-            (click)="startRename(row.id, row.label); $event.stopPropagation()"
-          >
-            <i class="fas fa-pencil"></i>
-          </button>
+        @if (dropTarget()?.rowIndex === i && dropTarget()?.zone === 'after') {
+          <div class="drop-line drop-line--after"></div>
         }
-        @if (row.kind === 'folder' && !row.isOther) {
+
+        @if (row.hasChildren) {
           <button
             type="button"
-            class="action-btn action-btn--danger"
-            [title]="row.hasChildren ? 'Folder is not empty' : 'Delete'"
-            [disabled]="row.hasChildren"
-            (click)="onDelete(row); $event.stopPropagation()"
+            class="chevron-btn"
+            (click)="toggleExpand(row.id, $event)"
+            [attr.aria-label]="row.expanded ? 'Collapse' : 'Expand'"
           >
-            <i class="fas fa-trash"></i>
+            <i
+              class="fas"
+              [class.fa-chevron-down]="row.expanded"
+              [class.fa-chevron-right]="!row.expanded"
+            ></i>
           </button>
+        } @else {
+          <span class="chevron-spacer"></span>
         }
-      </span>
-    </div>
-  </cdk-virtual-scroll-viewport>
+
+        @if (row.kind === 'file') {
+          <div class="file-content" (click)="onRowClick(row)">
+            <i class="fas fa-file row-icon"></i>
+            <span class="label">{{ row.label }}</span>
+          </div>
+        } @else if (editingId() === row.id) {
+          <i class="fas fa-folder row-icon"></i>
+          <input
+            type="text"
+            class="rename-input"
+            [pAutoFocus]="true"
+            [(ngModel)]="editingValue"
+            (keydown.enter)="commitRename(row.id)"
+            (keydown.escape)="cancelRename()"
+            (blur)="onRenameInputBlur(row.id)"
+            (click)="$event.stopPropagation()"
+          />
+          <button
+            type="button"
+            class="action-btn action-btn--confirm"
+            title="Confirm"
+            [disabled]="!editingValue().trim()"
+            (click)="commitRename(row.id); $event.stopPropagation()"
+          >
+            <i class="fas fa-check"></i>
+          </button>
+        } @else {
+          <div class="folder-content">
+            <i
+              class="fas row-icon"
+              [class.fa-user]="row.isOther && row.id !== OTHERS_ROOT_ID"
+              [class.fa-folder]="!row.isOther || row.id === OTHERS_ROOT_ID"
+            ></i>
+            <span
+              class="label"
+              (dblclick)="!row.isOther && startRename(row.id, row.label)"
+            >
+              {{ row.label }}
+            </span>
+          </div>
+        }
+
+        <span class="actions">
+          @if (!row.isOther && editingId() !== row.id) {
+            <button
+              type="button"
+              class="action-btn"
+              title="Move to…"
+              [disabled]="editingId() !== null"
+              (click)="openMovePicker(row, $event); $event.stopPropagation()"
+            >
+              <i class="fas fa-arrow-right-from-bracket"></i>
+            </button>
+          }
+          @if (row.kind === 'folder' && editingId() !== row.id && !row.isOther) {
+            <button
+              type="button"
+              class="action-btn"
+              title="Add subfolder"
+              [disabled]="editingId() !== null || isFiltering()"
+              (click)="onAddFolder(row.id); $event.stopPropagation()"
+            >
+              <i class="fas fa-folder-plus"></i>
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              title="Rename"
+              [disabled]="isFiltering()"
+              (click)="startRename(row.id, row.label); $event.stopPropagation()"
+            >
+              <i class="fas fa-pencil"></i>
+            </button>
+          }
+          @if (row.kind === 'folder' && !row.isOther) {
+            <button
+              type="button"
+              class="action-btn action-btn--danger"
+              [title]="row.hasChildren ? 'Folder is not empty' : 'Delete'"
+              [disabled]="row.hasChildren"
+              (click)="onDelete(row); $event.stopPropagation()"
+            >
+              <i class="fas fa-trash"></i>
+            </button>
+          }
+        </span>
+      </div>
+    }
+  </div>
 
   @if (flatRows().length === 0 && isFiltering()) {
     <div class="empty-state">No results for "{{ filterText() }}"</div>

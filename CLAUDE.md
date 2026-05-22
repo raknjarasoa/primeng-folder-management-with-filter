@@ -45,11 +45,10 @@ Parent inputs           Component internals
 
 ### Key design decisions
 
-- **Flat-list rendering on top of CDK virtual scroll.** `CdkTreeModule` doesn't pair well with virtual scrolling — every visible node ends up in the DOM. With the perf seed (100 folders × 2500 files = 250 k nodes) that's a non-starter. We flatten the tree into a single `FlatRowData[]` and render only the visible window.
-- **Custom drag hit-testing.** CDK drag-drop's built-in `cdkDropList` hit testing only sees rows currently in the DOM. `onDragMoved` resolves the target from pointer Y + viewport scroll offset, independent of DOM presence.
+- **Flat-list rendering using native Angular `@for` loop.** We flatten the tree into a single `FlatRowData[]` and render all items using a standard scrollable container with Angular's modern, highly optimized `@for` loop. This avoids all virtual scroll DOM recycling and indexing conflicts with CDK Drag & Drop.
+- **Custom drag hit-testing & smooth rAF auto-scroll.** `onDragMoved` resolves target rows from pointer Y and the native viewport's `scrollTop`. A smooth `requestAnimationFrame` auto-scroll loop triggers near container edges (60px zone, 3 to 40 px/frame speed ramping) and re-resolves coordinates on every frame so highlights track correctly as the tree scrolls underneath a static cursor.
 - **Immutable tree updates via structural sharing** (no `structuredClone`). `tree-helpers.ts` returns new arrays/folders only along the changed path.
-- **`ResizeObserver` inside the component.** Covers the hidden→visible transition when the tree lives inside a `<p-popover>` (CDK's own resize tracking can miss `display:none → block`). Initial measurement runs once via `afterNextRender`.
-- **Custom auto-scroll while dragging.** 60px trigger zone, speed ramps linearly from 3 → 40 px/frame as the pointer approaches the edge; the rAF loop also re-resolves the drop target each frame so the highlight tracks rows scrolling beneath a stationary pointer.
+- **Reactive Ancestor Auto-Expansion.** An `effect` in the constructor automatically expands all ancestors of the selected file. If the tree lives inside a popover (which destroys/recreates the component on hide/show), the selection's path is instantly restored and rendered open, while manual user collapses/expansions are untracked and preserved during the active lifecycle.
 - **"Other Users" synthetic subtree.** Orphan layouts (in `layouts` but not in `sessions`) are grouped under a synthetic `"Other Users"` folder at depth 0, then per-username folders at depth 1. The synthetic ids (`others-root`, `others-<username>`) must stay in sync between `flattenSessions` and `selectedFileAncestors`.
 - **Move-to picker.** A `<p-popover>` driven by `moveCandidates` (computed `FolderOption[]`) is the safe alternative to drag-drop while filtering is active — drag is gated by `!isFiltering()` because the flat-row depth scan in `resolveDropTarget` breaks when ancestors are hidden.
 

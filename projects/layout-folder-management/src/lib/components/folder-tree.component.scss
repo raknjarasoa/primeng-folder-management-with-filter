@@ -102,6 +102,7 @@
   border-radius: 4px;
   background: #ffffff;
   overflow-x: hidden;
+  overflow-y: auto;
 
   &.tree-viewport--empty {
     border-color: transparent;

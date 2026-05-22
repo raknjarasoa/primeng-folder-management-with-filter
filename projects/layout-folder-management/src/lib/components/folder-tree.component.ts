@@ -5,14 +5,13 @@ import {
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
-import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import {
-  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   inject,
   input,
   model,
@@ -63,7 +62,6 @@ type DropTarget = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
-    ScrollingModule,
     CdkDrag,
     CdkDropList,
     AutoFocus,
@@ -159,7 +157,7 @@ export class FolderTreeComponent {
     ),
   );
 
-  private readonly viewport = viewChild(CdkVirtualScrollViewport);
+  private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
@@ -172,6 +170,9 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
+  private autoScrollId: number | null = null;
+  private lastDragEvent: CdkDragMove | null = null;
+  private isDragging = false;
 
 
 
@@ -197,20 +198,11 @@ export class FolderTreeComponent {
       });
     });
 
-    // Keep the cdk-virtual-scroll viewport in sync with its container size.
-    // The hidden→visible transition that happens when this component lives
-    // inside an overlay (e.g. <p-popover>) isn't always caught by CDK's own
-    // resize observation, so we attach one here that calls checkViewportSize
-    // on every resize. Initial measurement runs once via afterNextRender.
     const destroyRef = inject(DestroyRef);
-    afterNextRender(() => {
-      const vp = this.viewport();
-      if (!vp) return;
-      vp.checkViewportSize();
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(() => vp.checkViewportSize());
-      observer.observe(vp.elementRef.nativeElement);
-      destroyRef.onDestroy(() => observer.disconnect());
+    destroyRef.onDestroy(() => {
+      if (this.autoScrollId !== null) {
+        cancelAnimationFrame(this.autoScrollId);
+      }
     });
   }
 
@@ -247,7 +239,61 @@ export class FolderTreeComponent {
     return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.isFiltering();
   }
 
+  private checkAutoScroll = () => {
+    if (!this.isDragging) {
+      console.log('[Autoscroll] Loop tick: isDragging is false, setting autoScrollId to null and returning');
+      this.autoScrollId = null;
+      return;
+    }
+
+    if (this.lastDragEvent) {
+      const vp = this.viewport();
+      if (vp) {
+        const element = vp.nativeElement;
+        const rect = element.getBoundingClientRect();
+        const pointerY = this.lastDragEvent.pointerPosition.y - rect.top;
+
+        const triggerZone = 60; // 60px trigger zone
+        let speed = 0;
+
+        if (pointerY >= 0 && pointerY < triggerZone) {
+          // Near the top: scroll up. Ramps linearly from 3px to 40px/frame.
+          const ratio = 1 - (pointerY / triggerZone);
+          speed = -(3 + ratio * 37);
+        } else if (pointerY > rect.height - triggerZone && pointerY <= rect.height) {
+          // Near the bottom: scroll down. Ramps linearly from 3px to 40px/frame.
+          const distanceToBottom = rect.height - pointerY;
+          const ratio = 1 - (distanceToBottom / triggerZone);
+          speed = 3 + ratio * 37;
+        }
+
+        console.log('[Autoscroll] Loop tick: pointerY =', pointerY, 'rect.height =', rect.height, 'speed =', speed);
+
+        if (speed !== 0) {
+          element.scrollTop += speed;
+          console.log('[Autoscroll] Scrolled element.scrollTop to:', element.scrollTop);
+          // Re-resolve target under cursor as elements scroll underneath a potentially static mouse
+          this.resolveTargetUnderCursor(this.lastDragEvent);
+        }
+      }
+    } else {
+      console.log('[Autoscroll] Loop tick: lastDragEvent is null');
+    }
+
+    this.autoScrollId = requestAnimationFrame(this.checkAutoScroll);
+  };
+
   protected onDragStarted(event: CdkDragStart, sourceRow: FlatRowData): void {
+    console.log('[Autoscroll] onDragStarted called for:', sourceRow.id);
+    this.isDragging = true;
+    this.lastDragEvent = null;
+    if (this.autoScrollId !== null) {
+      console.log('[Autoscroll] onDragStarted: autoScrollId not null, cancelling:', this.autoScrollId);
+      cancelAnimationFrame(this.autoScrollId);
+    }
+    this.autoScrollId = requestAnimationFrame(this.checkAutoScroll);
+    console.log('[Autoscroll] onDragStarted: Scheduled checkAutoScroll frame:', this.autoScrollId);
+
     // Snapshot the source id while the template binding is still trustworthy.
     this.draggedRowId = sourceRow.id;
     // Precompute the set of IDs we can't drop into (self + descendants). The
@@ -265,23 +311,27 @@ export class FolderTreeComponent {
     }
   }
 
-  // We can't rely on cdkDropList's built-in hit testing: virtual scroll keeps
-  // only the visible window in the DOM, so off-screen targets simply don't
-  // exist as drop zones. Instead we resolve the target row from the pointer's
-  // Y position + the viewport's scroll offset, then map that to an index in
-  // flatRows.
+  // We resolve the target row from the pointer's Y position + the viewport's
+  // scroll offset, then map that to an index in flatRows.
   protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
+    console.log('[Autoscroll] onDragMoved called for:', sourceRow.id);
+    this.lastDragEvent = event;
+    this.resolveTargetUnderCursor(event);
+  }
+
+  private resolveTargetUnderCursor(event: CdkDragMove): void {
     const vp = this.viewport();
     if (!vp) return;
 
-    const rect = vp.elementRef.nativeElement.getBoundingClientRect();
+    const element = vp.nativeElement;
+    const rect = element.getBoundingClientRect();
     const pointerYInViewport = event.pointerPosition.y - rect.top;
     if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
       this.dropTarget.set(null);
       return;
     }
 
-    const scrollOffset = vp.measureScrollOffset();
+    const scrollOffset = element.scrollTop;
     const pointerY = pointerYInViewport + scrollOffset;
     const rowIndex = Math.floor(pointerY / this.ROW_HEIGHT);
     const offsetInRow = pointerY - rowIndex * this.ROW_HEIGHT;
@@ -313,12 +363,16 @@ export class FolderTreeComponent {
     }
   }
 
-  // Uses (cdkDragEnded) — fires AFTER the drop animation finishes, so the
-  // source DOM is fully restored and cdkDrag's internal cleanup is done by
-  // the time we mutate `sessions`. Mutating earlier (e.g. on cdkDragReleased)
-  // races with the recycle-view-repeater strategy and produces the
-  // insertBefore / null-context errors observed under cdk-virtual-scroll.
   protected onDragEnded(_event: CdkDragEnd, _sourceRow: FlatRowData): void {
+    console.log('[Autoscroll] onDragEnded called for:', _sourceRow.id);
+    this.isDragging = false;
+    this.lastDragEvent = null;
+    if (this.autoScrollId !== null) {
+      console.log('[Autoscroll] onDragEnded: autoScrollId not null, cancelling:', this.autoScrollId);
+      cancelAnimationFrame(this.autoScrollId);
+      this.autoScrollId = null;
+    }
+
     const target = this.dropTarget();
     const sourceId = this.draggedRowId;
     this.dropTarget.set(null);
