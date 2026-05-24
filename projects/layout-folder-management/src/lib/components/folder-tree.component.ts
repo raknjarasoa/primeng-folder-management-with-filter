@@ -71,7 +71,7 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-  private readonly viewport = viewChild<ElementRef<HTMLElement>>(CdkVirtualScrollViewport, { read: ElementRef });
+  private readonly viewport = viewChild(CdkVirtualScrollViewport, { read: ElementRef });
   private readonly viewportComponent = viewChild(CdkVirtualScrollViewport);
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
