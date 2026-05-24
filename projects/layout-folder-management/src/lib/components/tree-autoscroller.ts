@@ -66,6 +66,7 @@ export class TreeAutoscroller {
    * @param viewportElement The HTML element acting as the scrollable viewport.
    */
   start(viewportElement: HTMLElement): void {
+    if (!viewportElement) return;
     this.viewportRect = viewportElement.getBoundingClientRect();
   }
 

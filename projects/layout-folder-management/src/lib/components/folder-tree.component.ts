@@ -71,7 +71,7 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-  private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
+  private readonly viewport = viewChild<ElementRef<HTMLElement>>(CdkVirtualScrollViewport, { read: ElementRef });
   private readonly viewportComponent = viewChild(CdkVirtualScrollViewport);
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
@@ -368,7 +368,7 @@ export class FolderTreeComponent {
    */
   private recomputeDropTargetAtPointerY(pointerYInViewport: number): void {
     const vp = this.viewport();
-    if (!vp) return;
+    if (!vp || !vp.nativeElement) return;
 
     const element = vp.nativeElement;
     
@@ -433,7 +433,7 @@ export class FolderTreeComponent {
       this.completePendingDrag(this.draggedRowId);
     }
     const vp = this.viewport();
-    if (vp) {
+    if (vp && vp.nativeElement) {
       this.autoscroller.start(vp.nativeElement);
     }
     this.draggedRowId = sourceRow.id;
