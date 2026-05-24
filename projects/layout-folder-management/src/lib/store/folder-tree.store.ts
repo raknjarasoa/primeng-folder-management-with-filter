@@ -1,4 +1,4 @@
-import { effect } from '@angular/core';
+import { effect, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import {
   patchState,
@@ -41,6 +41,7 @@ const initialFolderTreeState = {
   creatingId: null as string | null,
   expandedIds: new Set<string>() as ReadonlySet<string>,
   dropTarget: null as DropTarget | null,
+  focusedRowId: null as string | null,
 };
 
 /**
@@ -136,6 +137,10 @@ export const FolderTreeStore = signalStore(
 
     setCreatingId(creatingId: string | null): void {
       patchState(store, { creatingId });
+    },
+
+    setFocusedRowId(focusedRowId: string | null): void {
+      patchState(store, { focusedRowId });
     },
 
     setExpandedIds(expandedIds: ReadonlySet<string>): void {
@@ -258,6 +263,14 @@ export const FolderTreeStore = signalStore(
       effect(() => {
         const selectedId = store.selectedFileId();
         if (!selectedId) return;
+
+        // Auto focus the selected item
+        untracked(() => {
+          if (store.focusedRowId() !== selectedId) {
+            patchState(store, { focusedRowId: selectedId });
+          }
+        });
+
         const ancestors = store._selectedFileAncestors();
         if (ancestors.length === 0) return;
         patchState(store, (state) => {

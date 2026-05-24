@@ -3,9 +3,44 @@
 }
 
 .tree-container {
+  /* HSL Tailored Theme Custom Variables */
+  --tree-bg: #ffffff;
+  --tree-color: #1f2937;
+  --tree-border-color: #d1d5db;
+  --tree-row-hover-bg: #f3f4f6;
+  --tree-row-selected-bg: #eff6ff;
+  --tree-row-selected-border: #3b82f6;
+  --tree-row-focused-outline: #2563eb;
+  --tree-guideline-color: #e5e7eb;
+  --tree-toolbar-btn-bg: #ffffff;
+  --tree-toolbar-btn-hover: #f9fafb;
+  --tree-toolbar-btn-border: #d1d5db;
+  --tree-input-focus-border: #3b82f6;
+  --tree-icon-color: #6b7280;
+
   padding: 16px;
-  background: #ffffff;
-  color: #111827;
+  background: var(--tree-bg);
+  color: var(--tree-color);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tree-container {
+    --tree-bg: #0f172a;
+    --tree-color: #f8fafc;
+    --tree-border-color: #334155;
+    --tree-row-hover-bg: #1e293b;
+    --tree-row-selected-bg: rgba(59, 130, 246, 0.15);
+    --tree-row-selected-border: #60a5fa;
+    --tree-row-focused-outline: #60a5fa;
+    --tree-guideline-color: #334155;
+    --tree-toolbar-btn-bg: #1e293b;
+    --tree-toolbar-btn-hover: #334155;
+    --tree-toolbar-btn-border: #334155;
+    --tree-input-focus-border: #60a5fa;
+    --tree-icon-color: #94a3b8;
+  }
 }
 
 .toolbar {
@@ -27,7 +62,7 @@
 .search-icon {
   position: absolute;
   left: 10px;
-  color: #6b7280;
+  color: var(--tree-icon-color);
   font-size: 13px;
   pointer-events: none;
 }
@@ -37,15 +72,17 @@
   height: 100%;
   box-sizing: border-box;
   padding: 0 32px;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--tree-border-color);
+  border-radius: 6px;
+  background: var(--tree-bg);
+  color: var(--tree-color);
   font-size: 13px;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &:focus {
-    border-color: #111827;
+    border-color: var(--tree-input-focus-border);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
   }
 }
 
@@ -54,15 +91,16 @@
   right: 8px;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--tree-icon-color);
   cursor: pointer;
   padding: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.15s ease;
 
   &:hover {
-    color: #111827;
+    color: var(--tree-color);
   }
 }
 
@@ -74,18 +112,19 @@
   height: 36px;
   box-sizing: border-box;
   padding: 0 16px;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--tree-toolbar-btn-border);
+  border-radius: 6px;
+  background: var(--tree-toolbar-btn-bg);
+  color: var(--tree-color);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: #f3f4f6;
-    border-color: #111827;
+    background: var(--tree-toolbar-btn-hover);
+    border-color: var(--tree-color);
   }
 
   &:disabled {
@@ -98,11 +137,12 @@
 .tree-viewport {
   height: calc(var(--row-count, 0) * 28px);
   max-height: 400px;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  background: #ffffff;
+  border: 1px solid var(--tree-border-color);
+  border-radius: 6px;
+  background: var(--tree-bg);
   overflow-x: hidden;
   overflow-y: auto;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 
   &.tree-viewport--empty {
     border-color: transparent;
@@ -120,16 +160,38 @@
   cursor: default;
   position: relative;
   user-select: none;
-  background: #ffffff;
+  background: var(--tree-bg);
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  outline: none;
+  transition: background-color 0.15s ease;
+
+  /* Custom Guideline Rendering using dynamic --row-depth variable */
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc((var(--row-depth, 0) - 1) * var(--indent-px, 16px) + 12px);
+    width: 1px;
+    background-color: var(--tree-guideline-color);
+    opacity: 0.6;
+    pointer-events: none;
+  }
 
   &.tree-row--target-into {
-    background: #eff6ff;
-    outline: 2px solid #2563eb;
+    background: var(--tree-row-selected-bg);
+    outline: 2px solid var(--tree-row-selected-border);
     outline-offset: -2px;
     z-index: 2;
+  }
+
+  &.tree-row--focused {
+    outline: 2px solid var(--tree-row-focused-outline) !important;
+    outline-offset: -2px;
+    background: var(--tree-row-hover-bg);
+    z-index: 5;
   }
 
   &.tree-row--other {
@@ -139,7 +201,7 @@
 
 // Folder rows keep full-row hover so actions stay visually grouped
 .tree-row:not(:has(.file-content)):hover {
-  background: #f3f4f6;
+  background: var(--tree-row-hover-bg);
 }
 
 // Icon + label wrapper using CSS grid layout. Second column uses `1fr` with
@@ -163,15 +225,15 @@
   cursor: pointer;
 
   &:hover {
-    background: #f3f4f6;
+    background: var(--tree-row-hover-bg);
   }
 }
 
 // Selection is limited only to the file content box
 .tree-row--selected .file-content {
-  background: #eff6ff;
-  outline: 1px solid #3b82f6;
-  color: #1e3a8a;
+  background: var(--tree-row-selected-bg);
+  outline: 1px solid var(--tree-row-selected-border);
+  color: var(--tree-color);
 }
 
 .chevron-btn,
@@ -189,14 +251,17 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--tree-icon-color);
+  transition: transform 0.15s ease, color 0.15s ease;
 
   i {
     font-size: 10px;
   }
 
   &:hover {
-    color: #111827;
+    color: var(--tree-color);
+    background-color: rgba(100, 116, 139, 0.08);
+    border-radius: 4px;
   }
 }
 
@@ -205,7 +270,7 @@
   width: 14px;
   text-align: center;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--tree-icon-color);
 }
 
 .tree-row > .row-icon {
@@ -228,11 +293,12 @@
   height: 22px;
   box-sizing: border-box;
   padding: 0 4px;
-  border: 1px solid #111827;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--tree-input-focus-border);
+  background: var(--tree-bg);
+  color: var(--tree-color);
   font-size: 13px;
   outline: none;
+  border-radius: 4px;
 }
 
 .actions {
@@ -241,8 +307,10 @@
   flex-shrink: 0;
   margin-left: auto;
   opacity: 0;
+  transition: opacity 0.15s ease;
 
-  .tree-row:hover & {
+  .tree-row:hover &,
+  .tree-row--focused & {
     opacity: 1;
   }
 }
@@ -251,16 +319,17 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--tree-icon-color);
   padding: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: #e5e7eb;
-    color: #111827;
+    background: var(--tree-row-hover-bg);
+    color: var(--tree-color);
   }
 
   &:disabled {
@@ -271,17 +340,17 @@
   &--confirm {
     color: #16a34a;
     border: 1px solid #16a34a;
-    background: #ffffff;
+    background: var(--tree-bg);
 
     &:hover:not(:disabled) {
-      background: #f0fdf4;
+      background: rgba(22, 163, 74, 0.1);
       color: #15803d;
     }
   }
 
   &--danger {
     &:hover:not(:disabled) {
-      background: #fee2e2;
+      background: rgba(220, 38, 38, 0.1);
       color: #dc2626;
     }
   }
@@ -292,7 +361,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: #2563eb;
+  background: var(--tree-row-selected-border);
   pointer-events: none;
   z-index: 10;
 
@@ -307,20 +376,24 @@
 
 .empty-state {
   margin-top: 8px;
-  padding: 8px 12px;
-  border: 1px dashed #9ca3af;
-  border-radius: 4px;
-  background: #f9fafb;
+  padding: 12px;
+  border: 1px dashed var(--tree-border-color);
+  border-radius: 6px;
+  background: var(--tree-bg);
   font-size: 13px;
-  color: #6b7280;
+  color: var(--tree-icon-color);
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 /* CDK drag preview */
 ::ng-deep .cdk-drag-preview {
-  background: #ffffff !important;
-  border: 1px solid #111827 !important;
+  background: var(--tree-bg) !important;
+  border: 1px solid var(--tree-border-color) !important;
+  color: var(--tree-color) !important;
   padding: 4px 8px !important;
-  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
@@ -337,7 +410,7 @@
 }
 
 .cdk-drag-placeholder {
-  border: 1px dashed #9ca3af !important;
-  background: #f9fafb !important;
+  border: 1px dashed var(--tree-border-color) !important;
+  background: var(--tree-row-hover-bg) !important;
   opacity: 0.5 !important;
 }

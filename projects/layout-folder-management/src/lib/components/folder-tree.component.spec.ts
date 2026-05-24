@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
@@ -65,8 +65,18 @@ async function settleAfterFilter(fixture: ComponentFixture<FolderTreeComponent>)
 describe('FolderTreeComponent', () => {
   let fixture: ComponentFixture<FolderTreeComponent>;
   let component: FolderTreeComponent;
+  let originalClientHeight: any;
+  let originalScrollTo: any;
 
   beforeEach(async () => {
+    // Override clientHeight on HTMLElement prototype so CDK Virtual Scroll measures a non-zero height
+    originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 1000 });
+
+    // Mock scrollTo on HTMLElement prototype since jsdom doesn't support it
+    originalScrollTo = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.scrollTo = () => {};
+
     await TestBed.configureTestingModule({
       imports: [FolderTreeComponent, NoopAnimationsModule],
     }).compileComponents();
@@ -76,6 +86,19 @@ describe('FolderTreeComponent', () => {
 
     fixture.componentRef.setInput('sessions', []);
     fixture.componentRef.setInput('selectedFileId', null);
+  });
+
+  afterEach(() => {
+    if (originalClientHeight) {
+      Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalClientHeight);
+    } else {
+      delete (HTMLElement.prototype as any).clientHeight;
+    }
+    if (originalScrollTo) {
+      HTMLElement.prototype.scrollTo = originalScrollTo;
+    } else {
+      delete (HTMLElement.prototype as any).scrollTo;
+    }
   });
 
   // -----------------------------------------------------------------------
@@ -549,5 +572,93 @@ describe('FolderTreeComponent', () => {
     expect(rootRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
     expect(userRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
     expect(orphanRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Keyboard Navigation
+  // -----------------------------------------------------------------------
+
+  describe('Keyboard Navigation', () => {
+    beforeEach(async () => {
+      fixture.componentRef.setInput('sessions', makeSessions());
+      fixture.componentRef.setInput('layouts', makeLayouts());
+      await settle(fixture);
+    });
+
+    it('moves focus down on ArrowDown keypress', async () => {
+      const container = fixture.debugElement.query(By.css('.tree-container')).nativeElement;
+      
+      // Initially, no item is focused, so first keydown defaults focus to first visible row (f-root)
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('f-root');
+
+      // Next ArrowDown moves focus to file-top
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('file-top');
+    });
+
+    it('moves focus up on ArrowUp keypress', async () => {
+      const container = fixture.debugElement.query(By.css('.tree-container')).nativeElement;
+      
+      // Set initial focus to file-top
+      (component as any).store.setFocusedRowId('file-top');
+      await settle(fixture);
+
+      // ArrowUp moves focus up to f-root
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('f-root');
+    });
+
+    it('expands folder on ArrowRight and collapses on ArrowLeft', async () => {
+      const container = fixture.debugElement.query(By.css('.tree-container')).nativeElement;
+      
+      // Focus folder f-root
+      (component as any).store.setFocusedRowId('f-root');
+      await settle(fixture);
+
+      // ArrowRight expands it
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.expandedIds().has('f-root')).toBe(true);
+
+      // ArrowLeft collapses it
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.expandedIds().has('f-root')).toBe(false);
+    });
+
+    it('jumps focus to matching item on typeahead char keypress', async () => {
+      const container = fixture.debugElement.query(By.css('.tree-container')).nativeElement;
+      
+      // Start focus at f-root
+      (component as any).store.setFocusedRowId('f-root');
+      await settle(fixture);
+
+      // Press 't' to match 'Top Level File'
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('file-top');
+    });
+
+    it('jumps focus to first and last item on Home and End', async () => {
+      const container = fixture.debugElement.query(By.css('.tree-container')).nativeElement;
+      
+      // Start focus at f-root
+      (component as any).store.setFocusedRowId('f-root');
+      await settle(fixture);
+
+      // End key goes to last item (file-top)
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('file-top');
+
+      // Home key goes to first item (f-root)
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+      await settle(fixture);
+      expect((component as any).store.focusedRowId()).toBe('f-root');
+    });
   });
 });

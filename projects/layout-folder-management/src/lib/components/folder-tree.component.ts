@@ -5,12 +5,14 @@ import {
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
+import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
   effect,
   ElementRef,
+  HostListener,
   inject,
   input,
   model,
@@ -47,6 +49,7 @@ import { TreeAutoscroller } from './tree-autoscroller';
     CdkDropList,
     AutoFocus,
     MoveFolderPickerComponent,
+    ScrollingModule,
   ],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
@@ -69,6 +72,7 @@ export class FolderTreeComponent {
   protected readonly INDENT_PX = 16;
 
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
+  private readonly viewportComponent = viewChild(CdkVirtualScrollViewport);
   private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
@@ -192,12 +196,152 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected onRowClick(row: FlatRowData): void {
+    this.store.setFocusedRowId(row.id);
     if (row.kind === 'file') {
       this.store.setSelectedFileId(row.id);
       this.selectedFileId.set(row.id);
       this.fileSelected.emit(row.id);
     } else if (row.hasChildren) {
       this.store.toggleExpand(row.id);
+    }
+  }
+
+  @HostListener('keydown', ['$event'])
+  protected onKeyDown(event: KeyboardEvent): void {
+    const rows = this.store.flatRows();
+    if (rows.length === 0) return;
+
+    const focusedId = this.store.focusedRowId();
+    let focusedIdx = rows.findIndex((row) => row.id === focusedId);
+
+    // If no row is focused, default focus to the first visible row
+    if (focusedIdx === -1) {
+      this.store.setFocusedRowId(rows[0].id);
+      this.scrollToIndex(0);
+      return;
+    }
+
+    const currentRow = rows[focusedIdx];
+
+    // If user is currently renaming/editing a folder, ignore hotkeys except Enter/Esc
+    if (this.store.editingId() === currentRow.id) {
+      return;
+    }
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        if (focusedIdx < rows.length - 1) {
+          const nextRow = rows[focusedIdx + 1];
+          this.store.setFocusedRowId(nextRow.id);
+          this.scrollToIndex(focusedIdx + 1);
+        }
+        break;
+
+      case 'ArrowUp':
+        event.preventDefault();
+        if (focusedIdx > 0) {
+          const prevRow = rows[focusedIdx - 1];
+          this.store.setFocusedRowId(prevRow.id);
+          this.scrollToIndex(focusedIdx - 1);
+        }
+        break;
+
+      case 'ArrowRight':
+        event.preventDefault();
+        if (currentRow.kind === 'folder') {
+          if (!currentRow.expanded) {
+            this.store.expandFolder(currentRow.id);
+          } else if (focusedIdx < rows.length - 1) {
+            const nextRow = rows[focusedIdx + 1];
+            // If the next row is a child, focus it
+            if (nextRow.depth > currentRow.depth) {
+              this.store.setFocusedRowId(nextRow.id);
+              this.scrollToIndex(focusedIdx + 1);
+            }
+          }
+        }
+        break;
+
+      case 'ArrowLeft':
+        event.preventDefault();
+        if (currentRow.kind === 'folder' && currentRow.expanded) {
+          this.store.collapseFolder(currentRow.id);
+        } else if (currentRow.depth > 0) {
+          // Find the parent folder
+          for (let i = focusedIdx - 1; i >= 0; i--) {
+            if (rows[i].depth < currentRow.depth && rows[i].kind === 'folder') {
+              this.store.setFocusedRowId(rows[i].id);
+              this.scrollToIndex(i);
+              break;
+            }
+          }
+        }
+        break;
+
+      case ' ':
+      case 'Enter':
+        event.preventDefault();
+        this.onRowClick(currentRow);
+        break;
+
+      case 'F2':
+        event.preventDefault();
+        if (!currentRow.isOther) {
+          this.startRename(currentRow.id, currentRow.label);
+        }
+        break;
+
+      case 'Delete':
+        event.preventDefault();
+        if (!currentRow.isOther && !currentRow.hasChildren) {
+          this.onDelete(currentRow);
+        }
+        break;
+
+      case 'Escape':
+        event.preventDefault();
+        this.store.setSelectedFileId(null);
+        this.selectedFileId.set(null);
+        break;
+
+      case 'Home':
+        event.preventDefault();
+        this.store.setFocusedRowId(rows[0].id);
+        this.scrollToIndex(0);
+        break;
+
+      case 'End':
+        event.preventDefault();
+        this.store.setFocusedRowId(rows[rows.length - 1].id);
+        this.scrollToIndex(rows.length - 1);
+        break;
+
+      default:
+        // Wrap-around Typeahead search: jump focus to next item matching character pressed
+        if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          const char = event.key.toLowerCase();
+          for (let i = 1; i <= rows.length; i++) {
+            const idx = (focusedIdx + i) % rows.length;
+            if (rows[idx].label.toLowerCase().startsWith(char)) {
+              this.store.setFocusedRowId(rows[idx].id);
+              this.scrollToIndex(idx);
+              break;
+            }
+          }
+        }
+        break;
+    }
+  }
+
+  private scrollToIndex(index: number): void {
+    const vpt = this.viewportComponent();
+    if (vpt) {
+      const range = vpt.getRenderedRange();
+      // Scroll only if out of rendered boundaries to avoid heavy redraws
+      if (index < range.start || index >= range.end - 1) {
+        vpt.scrollToIndex(index);
+      }
     }
   }
 
