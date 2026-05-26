@@ -167,14 +167,15 @@ describe('FolderTreeComponent — browser mode', () => {
     const topFileRow = tree['flatRows']().find((r) => r.id === 'file-top')!;
 
     // Trigger Drag Start
-    tree['onDragStarted']({} as any, topFileRow);
+    tree['onDragStart']({} as any, topFileRow);
 
     // Simulate move by setting drop target on Root Folder (rowIndex is its index, zone is 'into')
     const targetIndex = tree['flatRows']().indexOf(rootFolderRow);
     tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'into' });
 
-    // Trigger Drag Ended
-    tree['onDragEnded']({} as any, topFileRow);
+    // Trigger Drag Drop and End
+    tree['onDragDrop']({ preventDefault: () => {} } as any, rootFolderRow);
+    tree['onDragEnd']();
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -190,13 +191,14 @@ describe('FolderTreeComponent — browser mode', () => {
     const file1Row = tree['flatRows']().find((r) => r.id === 'file-1')!;
     
     // Trigger Drag Start
-    tree['onDragStarted']({} as any, file1Row);
+    tree['onDragStart']({} as any, file1Row);
 
     // Simulate drop target after f-root (which maps parent to null / root)
     tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'after' });
 
-    // Trigger Drag Ended
-    tree['onDragEnded']({} as any, file1Row);
+    // Trigger Drag Drop and End
+    tree['onDragDrop']({ preventDefault: () => {} } as any, rootFolderRow);
+    tree['onDragEnd']();
 
     fixture.detectChanges();
     await fixture.whenStable();

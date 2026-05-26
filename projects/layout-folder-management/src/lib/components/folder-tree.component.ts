@@ -326,16 +326,9 @@ export class FolderTreeComponent {
     targetRow: FlatRowData,
     rowIndex: number,
   ): void {
-    if (
-      this.draggedRowId === null ||
-      this.dragForbiddenIds.has(targetRow.id) ||
-      targetRow.isOther
-    ) {
+    if (this.draggedRowId === null) {
       return;
     }
-
-    // Allow dropping by preventing default browser action
-    event.preventDefault();
 
     const rect = this.autoscroller.getViewportRect();
     if (!rect) return;
@@ -352,8 +345,20 @@ export class FolderTreeComponent {
       return;
     }
 
-    this.recomputeDropTargetAtPointerY(pointerYInViewport);
+    // ALWAYS move the autoscroller so that scrolling up/down works even when hovering over read-only folders
     this.autoscroller.move(pointerYInViewport);
+
+    // If target row is forbidden (descendant or synthetic other), hide drop-line marker and do NOT call preventDefault
+    const isForbidden =
+      this.dragForbiddenIds.has(targetRow.id) || targetRow.isOther;
+    if (isForbidden) {
+      this.store.setDropTarget(null);
+      return;
+    }
+
+    // Allow dropping on valid drop zones and recompute drop-line position
+    event.preventDefault();
+    this.recomputeDropTargetAtPointerY(pointerYInViewport);
   }
 
   /**

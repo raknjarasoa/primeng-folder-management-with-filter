@@ -96,6 +96,15 @@ export class FolderApiService {
       { id: 'v-other3', name: 'Alice Draft', editable: false, username: 'Alice', description: 'Working draft', tooltip: '' },
       { id: 'v-other4', name: 'Unknown Data', editable: false, username: '', description: '', tooltip: '' },
 
+      ...Array.from({ length: 100 }, (_, i) => ({
+        id: `v-other${i + 5}`,
+        name: `Other Layout #${i + 5}`,
+        editable: false,
+        username: 'Bulk',
+        description: '',
+        tooltip: '',
+      })),
+
       ...buildPerfLayouts(),
     ];
     return of(layouts).pipe(delay(120));
