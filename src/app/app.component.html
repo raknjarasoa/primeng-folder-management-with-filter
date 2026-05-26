@@ -1,0 +1,65 @@
+<div class="p-6">
+  <div class="flex items-center gap-3 mb-4">
+    <button
+      pButton
+      icon="fas fa-folder-tree"
+      label="Layouts"
+      outlined
+      (click)="treePopover.toggle($event)"
+    ></button>
+    <span class="text-sm">
+      Selected:
+      <span class="font-medium text-emerald-600 dark:text-emerald-400">{{
+        selectedFileName() ?? 'None'
+      }}</span>
+    </span>
+  </div>
+
+  <p-popover
+    #treePopover
+    [style]="{ width: '500px', maxHeight: '600px', overflow: 'auto' }"
+    (onShow)="onPopoverShow()"
+    (onHide)="onPopoverHide()"
+  >
+    @if (isLoading()) {
+      <div
+        class="p-6 flex flex-col items-center justify-center gap-2 text-gray-500"
+      >
+        <span
+          class="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400"
+          >Refreshing layouts...</span
+        >
+      </div>
+    } @else if (
+      isTreeVisible() && sessions1().length > 0 && layouts1().length > 0
+    ) {
+      <div class="tree-wrapper">
+        <ngx-powerful-tree
+          #primaryTree
+          [items]="treeItems()"
+          [rootIds]="treeRootIds()"
+          [searchQuery]="searchQuery()"
+          [multiSelect]="multiSelect()"
+          [folderIcon]="useCustomIcons() ? 'fa-solid fa-folder' : ''"
+          [fileIcon]="useCustomIcons() ? 'fa-solid fa-file' : ''"
+          [truncate]="truncateNames()"
+          [allowRename]="allowRename()"
+          [allowDelete]="allowDelete()"
+          (itemMoved)="onItemMoved($event)"
+          (itemRenamed)="onItemRenamed($event)"
+          (itemAdded)="onItemAdded($event)"
+          (itemDeleted)="onItemDeleted($event)"
+          (selectionChanged)="onSelectionChanged($event)"
+          (focusedChanged)="onFocusedChanged($event)"
+          (moveRequested)="onMoveRequested($event)"
+        >
+        </ngx-powerful-tree>
+      </div>
+    } @else {
+      <div class="p-6 text-center text-gray-400 dark:text-gray-500">
+        <i class="fas fa-exclamation-circle text-lg mb-1 block"></i>
+        <span>No layouts available.</span>
+      </div>
+    }
+  </p-popover>
+</div>
