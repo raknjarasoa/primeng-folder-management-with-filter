@@ -56,7 +56,7 @@ async function mountComponent(): Promise<ComponentFixture<FolderTreeComponent>> 
 
 // Apply a filter via the internal signal and wait for the 300 ms debounce.
 async function applyFilter(fixture: ComponentFixture<FolderTreeComponent>, text: string) {
-  fixture.componentInstance['filterText'].set(text);
+  fixture.componentInstance['store'].updateFilterText(text);
   fixture.detectChanges();
   await fixture.whenStable();
   fixture.detectChanges();
@@ -163,15 +163,15 @@ describe('FolderTreeComponent — browser mode', () => {
     const tree = fixture.componentInstance;
 
     // First drag: move file-top into f-root
-    const rootFolderRow = tree['flatRows']().find((r) => r.id === 'f-root')!;
-    const topFileRow = tree['flatRows']().find((r) => r.id === 'file-top')!;
+    const rootFolderRow = tree['store'].flatRows().find((r: any) => r.id === 'f-root')!;
+    const topFileRow = tree['store'].flatRows().find((r: any) => r.id === 'file-top')!;
 
     // Trigger Drag Start
     tree['onDragStart']({} as any, topFileRow);
 
     // Simulate move by setting drop target on Root Folder (rowIndex is its index, zone is 'into')
-    const targetIndex = tree['flatRows']().indexOf(rootFolderRow);
-    tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'into' });
+    const targetIndex = tree['store'].flatRows().indexOf(rootFolderRow);
+    tree['store'].setDropTarget({ rowIndex: targetIndex, zone: 'into' });
 
     // Trigger Drag Drop and End
     tree['onDragDrop']({ preventDefault: () => {} } as any, rootFolderRow);
@@ -188,13 +188,13 @@ describe('FolderTreeComponent — browser mode', () => {
 
     // Second drag: move file-1 (which is inside f-root) to top level after root folder
     // Since f-root was expanded upon dropping file-top, file-1 is in flatRows
-    const file1Row = tree['flatRows']().find((r) => r.id === 'file-1')!;
+    const file1Row = tree['store'].flatRows().find((r: any) => r.id === 'file-1')!;
     
     // Trigger Drag Start
     tree['onDragStart']({} as any, file1Row);
 
     // Simulate drop target after f-root (which maps parent to null / root)
-    tree['dropTarget'].set({ rowIndex: targetIndex, zone: 'after' });
+    tree['store'].setDropTarget({ rowIndex: targetIndex, zone: 'after' });
 
     // Trigger Drag Drop and End
     tree['onDragDrop']({ preventDefault: () => {} } as any, rootFolderRow);

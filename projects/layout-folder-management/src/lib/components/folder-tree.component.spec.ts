@@ -558,7 +558,7 @@ describe('FolderTreeComponent', () => {
     const tree = component as any;
 
     // Simulate drag start on file-top
-    const topFileRow = tree.flatRows().find((r: FlatRowData) => r.id === 'file-top')!;
+    const topFileRow = tree.store.flatRows().find((r: FlatRowData) => r.id === 'file-top')!;
     tree.onDragStart({} as any, topFileRow);
 
     // Mock viewport rect on the autoscroller so that bounds check passes
