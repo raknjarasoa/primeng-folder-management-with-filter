@@ -124,6 +124,8 @@
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
 
   &.tree-row--target-into {
     background: #eff6ff;
@@ -138,7 +140,7 @@
 }
 
 // Folder rows keep full-row hover so actions stay visually grouped
-.tree-row:not(:has(.file-content)):hover {
+.tree-row--folder:hover {
   background: #f3f4f6;
 }
 

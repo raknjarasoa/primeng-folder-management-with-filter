@@ -2,9 +2,9 @@ import { Injectable } from '@angular/core';
 import { LayoutInstance, TreeItem } from 'layout-folder-management';
 import { delay, Observable, of } from 'rxjs';
 
-// Perf-test seed: 250 generated items arranged into 10 folders × 25 files,
+// Perf-test seed: 100,000 generated items arranged into 400 folders × 250 files,
 // nested under a single "Performance test" parent.
-const PERF_FOLDER_COUNT = 100;
+const PERF_FOLDER_COUNT = 400;
 const PERF_FILES_PER_FOLDER = 250;
 
 function buildPerfSessions(): TreeItem {

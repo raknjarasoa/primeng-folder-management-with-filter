@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
-import { CdkDrag } from '@angular/cdk/drag-drop';
 
 import { FolderTreeComponent } from './folder-tree.component';
 import {
@@ -204,8 +203,8 @@ describe('FolderTreeComponent', () => {
     filterInput.dispatchEvent(new Event('input'));
     await settleAfterFilter(fixture);
 
-    const rootDrag = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"]')).injector.get(CdkDrag);
-    expect(rootDrag.disabled).toBe(true);
+    const rootRow = fixture.debugElement.query(By.css('.tree-row[data-id="f-root"]')).nativeElement as HTMLElement;
+    expect(rootRow.getAttribute('draggable')).toBe('false');
   });
 
   // -----------------------------------------------------------------------

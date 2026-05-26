@@ -35,9 +35,6 @@
 
   <div
     #viewport
-    cdkDropList
-    [cdkDropListSortingDisabled]="true"
-    [cdkDropListAutoScrollDisabled]="true"
     class="tree-viewport"
     [class.tree-viewport--empty]="store.flatRows().length === 0"
     [style.--row-count]="store.flatRows().length"
@@ -46,6 +43,8 @@
       <div
         class="tree-row"
         [attr.data-id]="row.id"
+        [class.tree-row--folder]="row.kind === 'folder'"
+        [class.tree-row--file]="row.kind === 'file'"
         [class.tree-row--selected]="
           row.kind === 'file' && store.selectedFileId() === row.id
         "
@@ -54,12 +53,12 @@
           store.dropTarget()?.rowIndex === i && store.dropTarget()?.zone === 'into'
         "
         [style.padding-left.px]="row.depth * INDENT_PX + 4"
-        cdkDrag
-        [cdkDragDisabled]="!canDrag(row)"
-        [cdkDragData]="row"
-        (cdkDragStarted)="onDragStarted($event, row)"
-        (cdkDragMoved)="onDragMoved($event, row)"
-        (cdkDragEnded)="onDragEnded($event, row)"
+        [attr.draggable]="canDrag(row) ? 'true' : 'false'"
+        (dragstart)="onDragStart($event, row)"
+        (dragover)="onDragOver($event, row, i)"
+        (dragleave)="onDragLeave()"
+        (drop)="onDragDrop($event, row)"
+        (dragend)="onDragEnd()"
       >
         @if (store.dropTarget()?.rowIndex === i && store.dropTarget()?.zone === 'before') {
           <div class="drop-line drop-line--before"></div>

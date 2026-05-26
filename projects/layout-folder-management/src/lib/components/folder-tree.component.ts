@@ -1,11 +1,4 @@
 import {
-  CdkDrag,
-  CdkDragEnd,
-  CdkDragMove,
-  CdkDragStart,
-  CdkDropList,
-} from '@angular/cdk/drag-drop';
-import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -26,7 +19,6 @@ import { LayoutInstance } from '../models/layout-instance.model';
 import { FolderTreeStore } from '../store/folder-tree.store';
 import {
   collectSubtreeIds,
-  DropTarget,
   DropZone,
   OTHERS_ROOT_ID,
 } from '../store/tree-helpers';
@@ -41,13 +33,7 @@ import { TreeAutoscroller } from './tree-autoscroller';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [FolderTreeStore],
-  imports: [
-    FormsModule,
-    CdkDrag,
-    CdkDropList,
-    AutoFocus,
-    MoveFolderPickerComponent,
-  ],
+  imports: [FormsModule, AutoFocus, MoveFolderPickerComponent],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
 })
@@ -69,7 +55,8 @@ export class FolderTreeComponent {
   protected readonly INDENT_PX = 16;
 
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
-  private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
+  private readonly movePicker =
+    viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
@@ -88,7 +75,10 @@ export class FolderTreeComponent {
   // Backward compatibility getters for unit tests
   // ---------------------------------------------------------------------------
 
-  private createStoreSignalWrapper<T>(getter: () => T, updater: (value: T) => void) {
+  private createStoreSignalWrapper<T>(
+    getter: () => T,
+    updater: (value: T) => void,
+  ) {
     const fn = getter as any;
     fn.set = updater;
     fn.update = (updateFn: (val: T) => T) => {
@@ -100,35 +90,35 @@ export class FolderTreeComponent {
   protected get filterText() {
     return this.createStoreSignalWrapper(
       () => this.store.filterText(),
-      (v) => this.store.updateFilterText(v)
+      (v) => this.store.updateFilterText(v),
     );
   }
 
   protected get editingId() {
     return this.createStoreSignalWrapper(
       () => this.store.editingId(),
-      (v) => this.store.setEditingId(v)
+      (v) => this.store.setEditingId(v),
     );
   }
 
   protected get editingValue() {
     return this.createStoreSignalWrapper(
       () => this.store.editingValue(),
-      (v) => this.store.setEditingValue(v)
+      (v) => this.store.setEditingValue(v),
     );
   }
 
   protected get creatingId() {
     return this.createStoreSignalWrapper(
       () => this.store.creatingId(),
-      (v) => this.store.setCreatingId(v)
+      (v) => this.store.setCreatingId(v),
     );
   }
 
   protected get expandedIds() {
     return this.createStoreSignalWrapper(
       () => this.store.expandedIds(),
-      (v) => this.store.setExpandedIds(v)
+      (v) => this.store.setExpandedIds(v),
     );
   }
 
@@ -143,7 +133,7 @@ export class FolderTreeComponent {
   protected get dropTarget() {
     return this.createStoreSignalWrapper(
       () => this.store.dropTarget(),
-      (v) => this.store.setDropTarget(v)
+      (v) => this.store.setDropTarget(v),
     );
   }
 
@@ -213,13 +203,15 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected canDrag(row: FlatRowData): boolean {
-    return !row.isOther && row.id !== OTHERS_ROOT_ID && !this.store.isFiltering();
+    return (
+      !row.isOther && row.id !== OTHERS_ROOT_ID && !this.store.isFiltering()
+    );
   }
 
   /**
    * Finds the drop target index and sub-zone under the cursor coordinates relative to the viewport.
    * Updates dropTarget signal.
-   * 
+   *
    * @param pointerYInViewport The mouse/pointer pointer coordinate.
    */
   private recomputeDropTargetAtPointerY(pointerYInViewport: number): void {
@@ -227,11 +219,14 @@ export class FolderTreeComponent {
     if (!vp) return;
 
     const element = vp.nativeElement;
-    
+
     // Clamp the pointer coordinate to valid viewport bounds [0, height - 1] to keep drop targets active at the boundaries
     const rect = this.autoscroller.getViewportRect();
     const viewportHeight = rect ? rect.height : element.clientHeight;
-    const clampedPointerY = Math.max(0, Math.min(viewportHeight - 1, pointerYInViewport));
+    const clampedPointerY = Math.max(
+      0,
+      Math.min(viewportHeight - 1, pointerYInViewport),
+    );
 
     const scrollOffset = element.scrollTop;
     const pointerY = clampedPointerY + scrollOffset;
@@ -267,7 +262,7 @@ export class FolderTreeComponent {
 
   /**
    * Performs the mutation on structural drop confirmation and stops autoscrolling.
-   * 
+   *
    * @param sourceId The ID of the item being dropped.
    */
   private completePendingDrag(sourceId: string): void {
@@ -279,43 +274,78 @@ export class FolderTreeComponent {
   }
 
   /**
-   * Fired when a CDK drag session begins. Initializes tracking bounds, prevents self-loops.
-   * 
-   * @param event The CDK drag start event.
+   * Fired when a native drag session begins.
+   *
+   * @param event The native DragEvent.
    * @param sourceRow The metadata of the item being dragged.
    */
-  protected onDragStarted(event: CdkDragStart, sourceRow: FlatRowData): void {
+  protected onDragStart(event: DragEvent, sourceRow: FlatRowData): void {
+    if (!this.canDrag(sourceRow)) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', sourceRow.id);
+    }
+
     if (this.draggedRowId !== null) {
       this.completePendingDrag(this.draggedRowId);
     }
+
     const vp = this.viewport();
     if (vp) {
       this.autoscroller.start(vp.nativeElement);
     }
+
     this.draggedRowId = sourceRow.id;
-    this.dragForbiddenIds = collectSubtreeIds(this.store.sessions(), sourceRow.id);
-    if (sourceRow.kind === 'folder' && this.store.expandedIds().has(sourceRow.id)) {
+    this.dragForbiddenIds = collectSubtreeIds(
+      this.store.sessions(),
+      sourceRow.id,
+    );
+
+    if (
+      sourceRow.kind === 'folder' &&
+      this.store.expandedIds().has(sourceRow.id)
+    ) {
       this.store.collapseFolder(sourceRow.id);
     }
   }
 
   /**
-   * Fired continually during the drag move lifecycle.
-   * 
-   * @param event The CDK drag move event.
-   * @param sourceRow The row metadata being dragged.
+   * Fired when a dragged element hovers over a row.
+   *
+   * @param event The native DragEvent.
+   * @param targetRow The metadata of the row being hovered over.
+   * @param rowIndex The zero-based index of the hovered row.
    */
-  protected onDragMoved(event: CdkDragMove, sourceRow: FlatRowData): void {
+  protected onDragOver(
+    event: DragEvent,
+    targetRow: FlatRowData,
+    rowIndex: number,
+  ): void {
+    if (
+      this.draggedRowId === null ||
+      this.dragForbiddenIds.has(targetRow.id) ||
+      targetRow.isOther
+    ) {
+      return;
+    }
+
+    // Allow dropping by preventing default browser action
+    event.preventDefault();
+
     const rect = this.autoscroller.getViewportRect();
     if (!rect) return;
 
-    const pointerYInViewport = event.pointerPosition.y - rect.top;
-    
-    // If the pointer goes completely out of bounds (exceeding a generous 30px buffer),
-    // we clear the drop target and pause autoscrolling. We do NOT invoke stop() here
-    // because that would destroy the viewportRect cache needed for future movements.
+    const pointerYInViewport = event.clientY - rect.top;
+
     const OUT_OF_BOUNDS_BUFFER = 30;
-    if (pointerYInViewport < -OUT_OF_BOUNDS_BUFFER || pointerYInViewport > rect.height + OUT_OF_BOUNDS_BUFFER) {
+    if (
+      pointerYInViewport < -OUT_OF_BOUNDS_BUFFER ||
+      pointerYInViewport > rect.height + OUT_OF_BOUNDS_BUFFER
+    ) {
       this.store.setDropTarget(null);
       this.autoscroller.pause();
       return;
@@ -326,15 +356,33 @@ export class FolderTreeComponent {
   }
 
   /**
-   * Fired when the drag drops or finishes.
-   * 
-   * @param event The CDK drag end event.
-   * @param sourceRow The row metadata that was dragged.
+   * Fired when a dragged element leaves a row.
    */
-  protected onDragEnded(event: CdkDragEnd, sourceRow: FlatRowData): void {
-    if (sourceRow.id === this.draggedRowId) {
-      this.completePendingDrag(sourceRow.id);
+  protected onDragLeave(): void {
+    // Optional: add lightweight dragleave logic if needed
+  }
+
+  /**
+   * Fired when a native drag drop is completed over a row.
+   *
+   * @param event The native DragEvent.
+   * @param targetRow The metadata of the row being dropped on.
+   */
+  protected onDragDrop(event: DragEvent, targetRow: FlatRowData): void {
+    event.preventDefault();
+    if (this.draggedRowId !== null) {
+      this.completePendingDrag(this.draggedRowId);
     }
+  }
+
+  /**
+   * Fired when a native drag operation is ended.
+   */
+  protected onDragEnd(): void {
+    this.autoscroller.stop();
+    this.draggedRowId = null;
+    this.dragForbiddenIds = new Set();
+    this.store.setDropTarget(null);
   }
 
   // ---------------------------------------------------------------------------
@@ -352,7 +400,7 @@ export class FolderTreeComponent {
   /**
    * Triggered when creating a new folder in the directory tree.
    * Automatically unfolds parent structures and launches edit mode.
-   * 
+   *
    * @param parentId The parent ID to insert under, or null for root level.
    */
   protected onAddFolder(parentId: string | null = null): void {
@@ -362,7 +410,7 @@ export class FolderTreeComponent {
 
   /**
    * Initiates edit mode on a folder's label name.
-   * 
+   *
    * @param id Unique identifier of the folder to rename.
    * @param currentLabel Current name of the folder.
    */
@@ -372,7 +420,7 @@ export class FolderTreeComponent {
 
   /**
    * Saves the edit name mutation and leaves edit mode.
-   * 
+   *
    * @param id The folder being renamed.
    */
   protected commitRename(id: string): void {
@@ -390,7 +438,7 @@ export class FolderTreeComponent {
 
   /**
    * Handles the text input blur event when renaming a folder.
-   * 
+   *
    * @param id Unique folder ID.
    */
   protected onRenameInputBlur(id: string): void {
@@ -405,7 +453,7 @@ export class FolderTreeComponent {
 
   /**
    * Deletes a folder or file row from the tree.
-   * 
+   *
    * @param row Metadata of the row to remove.
    */
   protected onDelete(row: FlatRowData): void {
@@ -423,7 +471,7 @@ export class FolderTreeComponent {
 
   /**
    * Opens the destination folder selector popover menu.
-   * 
+   *
    * @param row The row model to relocate.
    * @param event The mouse click event.
    */
@@ -433,10 +481,13 @@ export class FolderTreeComponent {
 
   /**
    * Triggered upon confirming destination target inside the move popover dialog.
-   * 
+   *
    * @param request Payload containing source ID and target host ID.
    */
-  protected onMoveConfirmed({ sourceId, targetFolderId }: MoveFolderRequest): void {
+  protected onMoveConfirmed({
+    sourceId,
+    targetFolderId,
+  }: MoveFolderRequest): void {
     this.store.moveNode(sourceId, targetFolderId, 0);
     if (targetFolderId) {
       this.store.expandFolder(targetFolderId);
