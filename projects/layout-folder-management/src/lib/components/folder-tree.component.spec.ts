@@ -549,4 +549,68 @@ describe('FolderTreeComponent', () => {
     expect(userRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
     expect(orphanRow.nativeElement.classList.contains('tree-row--other')).toBe(true);
   });
+
+  it('updates the autoscroller but clears the drop target and blocks dropping when dragging over forbidden / other-user rows', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    const tree = component as any;
+
+    // Simulate drag start on file-top
+    const topFileRow = tree.flatRows().find((r: FlatRowData) => r.id === 'file-top')!;
+    tree.onDragStart({} as any, topFileRow);
+
+    // Mock viewport rect on the autoscroller so that bounds check passes
+    vi.spyOn(tree.autoscroller, 'getViewportRect').mockReturnValue({
+      top: 100,
+      height: 400,
+      bottom: 500,
+      left: 0,
+      right: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    } as any);
+
+    // Spy on the move method of the autoscroller
+    const autoscrollerMoveSpy = vi.spyOn(tree.autoscroller, 'move');
+
+    // Create a mock drag event targeting an "Other Users" row
+    const mockOtherRow: FlatRowData = {
+      id: 'virtual-others-root',
+      parentId: null,
+      kind: 'folder',
+      name: 'Other Users',
+      level: 0,
+      expandable: true,
+      isOther: true,
+      editable: false,
+      username: '',
+      description: '',
+      tooltip: '',
+    };
+
+    const dragEvent = {
+      clientY: 200, // 200 - 100 = 100 pointerY inside viewport bounds
+      preventDefault: vi.fn(),
+    } as any;
+
+    // Set a dummy dropTarget beforehand to verify it gets cleared
+    tree.store.setDropTarget({ rowIndex: 0, zone: 'into' });
+    expect(tree.store.dropTarget()).not.toBeNull();
+
+    // Trigger onDragOver
+    tree.onDragOver(dragEvent, mockOtherRow, 0);
+
+    // Assert: Drop target is cleared
+    expect(tree.store.dropTarget()).toBeNull();
+
+    // Assert: preventDefault is NOT called (dropping is blocked)
+    expect(dragEvent.preventDefault).not.toHaveBeenCalled();
+
+    // Assert: autoscroller.move WAS called with pointer Y (100)
+    expect(autoscrollerMoveSpy).toHaveBeenCalledWith(100);
+  });
 });
