@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
+import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 
 import { FlatRowData, TreeItem } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
@@ -33,7 +34,7 @@ import { TreeAutoscroller } from './tree-autoscroller';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [FolderTreeStore],
-  imports: [FormsModule, AutoFocus, MoveFolderPickerComponent],
+  imports: [FormsModule, AutoFocus, MoveFolderPickerComponent, ScrollingModule],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
 })
@@ -54,7 +55,7 @@ export class FolderTreeComponent {
   protected readonly ROW_HEIGHT = 28;
   protected readonly INDENT_PX = 16;
 
-  private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
+  private readonly viewport = viewChild<CdkVirtualScrollViewport>('viewport');
   private readonly movePicker =
     viewChild<MoveFolderPickerComponent>('movePicker');
 
@@ -65,7 +66,7 @@ export class FolderTreeComponent {
   private draggedRowId: string | null = null;
 
   private readonly autoscroller = new TreeAutoscroller(
-    () => this.viewport()?.nativeElement,
+    () => this.viewport()?.elementRef.nativeElement,
     {
       onScrollTick: (pointerY) => this.recomputeDropTargetAtPointerY(pointerY),
     },
@@ -218,7 +219,7 @@ export class FolderTreeComponent {
     const vp = this.viewport();
     if (!vp) return;
 
-    const element = vp.nativeElement;
+    const element = vp.elementRef.nativeElement;
 
     // Clamp the pointer coordinate to valid viewport bounds [0, height - 1] to keep drop targets active at the boundaries
     const rect = this.autoscroller.getViewportRect();
@@ -296,7 +297,7 @@ export class FolderTreeComponent {
 
     const vp = this.viewport();
     if (vp) {
-      this.autoscroller.start(vp.nativeElement);
+      this.autoscroller.start(vp.elementRef.nativeElement);
     }
 
     this.draggedRowId = sourceRow.id;

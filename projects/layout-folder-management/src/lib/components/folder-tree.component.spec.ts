@@ -45,7 +45,21 @@ function makeLayouts(): LayoutInstance[] {
 }
 
 async function settle(fixture: ComponentFixture<FolderTreeComponent>): Promise<void> {
+  const viewportDebug = fixture.debugElement.query(By.css('.tree-viewport'));
+  if (viewportDebug) {
+    const el = viewportDebug.nativeElement;
+    if (el && !el.hasOwnProperty('clientHeight')) {
+      Object.defineProperty(el, 'clientHeight', { value: 1000, configurable: true });
+    }
+  }
   fixture.detectChanges();
+
+  // Force CDK Virtual Scroll to re-evaluate its viewport size using the mocked clientHeight
+  const comp = fixture.componentInstance as any;
+  if (comp.viewport && comp.viewport()) {
+    comp.viewport().checkViewportSize();
+  }
+
   await fixture.whenStable();
   fixture.detectChanges();
 }

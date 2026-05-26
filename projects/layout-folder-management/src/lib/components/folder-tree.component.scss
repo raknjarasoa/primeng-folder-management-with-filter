@@ -96,6 +96,7 @@
 
 /* Tree Viewport */
 .tree-viewport {
+  display: block;
   height: calc(var(--row-count, 0) * 28px);
   max-height: 400px;
   border: 1px solid #9ca3af;
