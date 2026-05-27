@@ -1,3 +1,4 @@
+import { Guid } from 'guid-typescript'
 import {
   FlatRowData,
   TreeItem,
@@ -5,12 +6,12 @@ import {
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
 
-export interface NodeLocation {
+export type NodeLocation = {
   node: TreeItem;
   parent: TreeItem | null;
   index: number;
   siblings: TreeItem[];
-}
+};
 
 export function findLocation(
   forest: TreeItem[],
@@ -149,9 +150,10 @@ export function addFolder(
   parentFolderId: string | null,
   name: string,
 ): { forest: TreeItem[]; newId: string } {
-  const newId = `f-${Date.now().toString(36)}`;
+  const newId = `folder-${Guid.create().toString()}`;
   const folder: TreeItem = { id: newId, kind: 'folder', name, children: [] };
-  return { forest: insertNode(forest, folder, parentFolderId, 0), newId };
+  const newForest = insertNode(forest, folder, parentFolderId, 0);
+  return { forest: newForest, newId };
 }
 
 export function collectAncestorIds(
@@ -159,7 +161,8 @@ export function collectAncestorIds(
   targetId: string,
 ): string[] | null {
   const path: string[] = [];
-  return walkPath(forest, targetId, path) ? path : null;
+  const found = walkPath(forest, targetId, path)
+  return found ? path : null;
 }
 
 function walkPath(nodes: TreeItem[], targetId: string, path: string[]): boolean {
@@ -196,11 +199,11 @@ function collectAllIds(nodes: TreeItem[], out: Set<string>): void {
   }
 }
 
-export interface FolderOption {
+export type FolderOption = {
   id: string;
   label: string;
   depth: number;
-}
+};
 
 // Walks the session forest and returns every folder as a flat list (id +
 // label + depth), skipping anything whose id is in `excludeIds`. Used by the
@@ -226,28 +229,48 @@ export function flattenFolders(
 // single list cdk-virtual-scroll consumes. When `filter` is non-empty, only
 // nodes whose label/metadata match, plus their ancestors, are emitted, and
 // matching subtrees are force-expanded so matches are visible.
-export const OTHERS_ROOT_ID = 'others-root';
-const OTHERS_USER_PREFIX = 'others-';
+//
+// The orphan-grouping step (which iterates *every* layout) is intentionally
+// NOT done here — pass it in precomputed via `orphanGroups`. The caller is
+// expected to wrap this in a memoised computed signal so we don't re-iterate
+// the entire `layoutsById` set on every expand/collapse or filter change.
+export const OTHERS_ROOT_ID = 'virtual-others-root';
+export const OTHERS_USER_PREFIX = 'virtual-user-';
+
+export type OrphanGroups = {
+  othersByUsername: Record<string, LayoutInstance[]>;
+  othersUsernames: string[];
+};
+
+// Walks every layout once, bucketing those not present in `sessionFileIds`
+// under their username. Hot for large `layoutsById` — must only re-run when
+// `sessions` or `layoutsById` change, never on expand/filter/selection.
+export function groupOrphanLayouts(
+  layoutsById: Record<string, LayoutInstance>,
+  sessionFileIds: ReadonlySet<string>,
+): OrphanGroups {
+  const othersByUsername: Record<string, LayoutInstance[]> = {};
+  for (const layout of Object.values(layoutsById)) {
+    if (sessionFileIds.has(layout.id)) continue;
+    const uname = layout.username || 'Unknown User';
+    (othersByUsername[uname] ??= []).push(layout);
+  }
+  return {
+    othersByUsername,
+    othersUsernames: Object.keys(othersByUsername).sort(),
+  };
+}
 
 export function flattenSessions(
   sessions: TreeItem[],
   layoutsById: Record<string, LayoutInstance>,
+  orphanGroups: OrphanGroups,
   expandedIds: ReadonlySet<string>,
   filter = '',
 ): FlatRowData[] {
   const query = filter.trim().toLowerCase();
   const result: FlatRowData[] = [];
-
-  // Group orphan layouts by username for the "Others" subtree.
-  const sessionFileIds = collectSessionFileIds(sessions);
-  const othersByUsername: Record<string, LayoutInstance[]> = {};
-  for (const layout of Object.values(layoutsById)) {
-    if (!sessionFileIds.has(layout.id)) {
-      const uname = layout.username || 'Unknown User';
-      (othersByUsername[uname] ??= []).push(layout);
-    }
-  }
-  const othersUsernames = Object.keys(othersByUsername).sort();
+  const { othersByUsername, othersUsernames } = orphanGroups;
 
   // Build the include set when filtering. A node is included if it (or any
   // descendant) matches the query.
@@ -347,7 +370,10 @@ export function flattenSessions(
   return result;
 }
 
-function collectSessionFileIds(sessions: TreeItem[]): Set<string> {
+// Walks the session tree once and returns the set of file ids present in it.
+// Lifted out of flattenSessions so the result can be memoised independently
+// of `expandedIds` / `filter`.
+export function collectSessionFileIds(sessions: TreeItem[]): Set<string> {
   const ids = new Set<string>();
   const walk = (nodes: TreeItem[]): void => {
     for (const n of nodes) {

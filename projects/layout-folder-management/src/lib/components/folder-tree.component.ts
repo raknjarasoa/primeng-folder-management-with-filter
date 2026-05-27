@@ -1,7 +1,7 @@
 import {
   CdkDrag,
+  CdkDragEnd,
   CdkDragMove,
-  CdkDragRelease,
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
@@ -15,7 +15,6 @@ import {
   effect,
   inject,
   input,
-  linkedSignal,
   model,
   output,
   signal,
@@ -25,12 +24,6 @@ import {
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { AutoFocus } from 'primeng/autofocus';
-import { ButtonModule } from 'primeng/button';
-import { IconFieldModule } from 'primeng/iconfield';
-import { InputIconModule } from 'primeng/inputicon';
-import { InputTextModule } from 'primeng/inputtext';
-import { Popover } from 'primeng/popover';
-import { TooltipModule } from 'primeng/tooltip';
 import { debounceTime } from 'rxjs/operators';
 
 import {
@@ -39,24 +32,30 @@ import {
 } from '../models/folder-tree.models';
 import { LayoutInstance } from '../models/layout-instance.model';
 import {
-  FolderOption,
-  OTHERS_ROOT_ID,
   addFolder,
   collectAncestorIds,
+  collectSessionFileIds,
   collectSubtreeIds,
-  flattenFolders,
   flattenSessions,
+  groupOrphanLayouts,
   insertNode,
   isAncestorOrSelf,
+  OrphanGroups,
+  OTHERS_ROOT_ID,
+  OTHERS_USER_PREFIX,
   removeNode,
   renameFolder,
 } from '../store/tree-helpers';
+import {
+  MoveFolderPickerComponent,
+  MoveFolderRequest,
+} from './move-folder-picker.component';
 
 type DropZone = 'before' | 'into' | 'after';
-interface DropTarget {
+type DropTarget = {
   rowIndex: number;
   zone: DropZone;
-}
+};
 
 @Component({
   selector: 'app-folder-tree',
@@ -68,29 +67,20 @@ interface DropTarget {
     CdkDrag,
     CdkDropList,
     AutoFocus,
-    ButtonModule,
-    InputTextModule,
-    IconFieldModule,
-    InputIconModule,
-    Popover,
-    TooltipModule,
+    MoveFolderPickerComponent,
   ],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
 })
 export class FolderTreeComponent {
-  // ---------------------------------------------------------------------------
-  // Inputs / outputs
-  // ---------------------------------------------------------------------------
-
+  readonlyInstance = input(false);
   sessions = model.required<TreeItem[]>();
   layouts = input<LayoutInstance[]>([]);
   selectedFileId = model.required<string | null>();
 
-  // Fires on every file-row click, including re-clicks of the currently
-  // selected file (where `selectedFileId` would not emit because the value
-  // didn't change).
   fileSelected = output<string>();
+
+  protected readonly OTHERS_ROOT_ID = OTHERS_ROOT_ID;
 
   // Must match the row CSS height. CDK virtual scroll places rows by index *
   // ROW_HEIGHT; if these diverge you'll see overlap or gaps.
@@ -100,15 +90,13 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
   // UI state
   // ---------------------------------------------------------------------------
-
-  protected readonly expandedIds = signal<ReadonlySet<string>>(new Set());
-
+  protected readonly filterText = signal<string>('');
   protected readonly editingId = signal<string | null>(null);
   protected readonly editingValue = signal<string>('');
-  protected readonly creatingId = signal<string | null>(null);
+  private readonly creatingId = signal<string | null>(null);
+  private readonly expandedIds = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly filterText = signal<string>('');
-  protected readonly debouncedFilterText = toSignal(
+  protected readonly debouncedFilterText = toSignal<string, string>(
     toObservable(this.filterText).pipe(debounceTime(300)),
     { initialValue: '' },
   );
@@ -119,35 +107,22 @@ export class FolderTreeComponent {
   // Active drag-drop target indicator (rendered as a blue line / highlight).
   protected readonly dropTarget = signal<DropTarget | null>(null);
 
-  // Source row id while the "Move to…" picker is open. Drives the candidate
-  // list and is consumed on selection.
-  protected readonly movingRowId = signal<string | null>(null);
-
-  // Tracks layout ids we've deleted locally so they don't reappear under
-  // "Others" while the parent's `layouts` input still contains them. Resets
-  // automatically when the parent emits a new layouts array.
-  private readonly suppressedLayoutIds = linkedSignal<LayoutInstance[], ReadonlySet<string>>({
-    source: this.layouts,
-    computation: () => new Set<string>(),
-  });
-
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
 
   private readonly layoutsById = computed<Record<string, LayoutInstance>>(() => {
-    const suppressed = this.suppressedLayoutIds();
     const out: Record<string, LayoutInstance> = {};
     for (const l of this.layouts()) {
-      if (!suppressed.has(l.id)) out[l.id] = l;
+      out[l.id] = l;
     }
     return out;
   });
 
   // IDs of folders to expand so the selected file becomes visible. If the
   // selection lives inside the real session tree we return that path; otherwise
-  // we return the synthetic "Others" path. The hardcoded ids must stay in sync
-  // with the rows produced by flattenSessions in tree-helpers.ts.
+  // we return the synthetic "Others" path built from the shared constants
+  // exported by tree-helpers.ts.
   private readonly selectedFileAncestors = computed<string[]>(() => {
     const fileId = this.selectedFileId();
     if (!fileId) return [];
@@ -158,33 +133,34 @@ export class FolderTreeComponent {
     const layout = this.layoutsById()[fileId];
     if (layout) {
       const uname = layout.username || 'Unknown User';
-      return ['others-root', `others-${uname}`];
+      return [OTHERS_ROOT_ID, `${OTHERS_USER_PREFIX}${uname}`];
     }
 
     return [];
+  });
+
+  // Orphan-layout grouping is hoisted out of `flattenSessions` because it
+  // iterates every entry in `layoutsById`. Without this memo, every
+  // expand/collapse/filter/selection change would re-walk all layouts, which
+  // dominates the change-detection cost (profiled at ~12 ms for the perf
+  // dataset). Recomputes only when sessions or layouts change.
+  private readonly orphanGroups = computed<OrphanGroups>(() => {
+    const fileIds = collectSessionFileIds(this.sessions());
+    return groupOrphanLayouts(this.layoutsById(), fileIds);
   });
 
   protected readonly flatRows = computed<FlatRowData[]>(() =>
     flattenSessions(
       this.sessions(),
       this.layoutsById(),
+      this.orphanGroups(),
       this.expandedIds(),
       this.debouncedFilterText().trim(),
     ),
   );
 
-  // Folders that are valid "Move to…" targets given the current movingRowId
-  // (the source's own subtree is excluded to prevent cycles). Empty when the
-  // picker is closed.
-  protected readonly moveCandidates = computed<FolderOption[]>(() => {
-    const sourceId = this.movingRowId();
-    if (!sourceId) return [];
-    const exclude = collectSubtreeIds(this.sessions(), sourceId);
-    return flattenFolders(this.sessions(), exclude);
-  });
-
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
-  private readonly movePicker = viewChild<Popover>('movePicker');
+  private readonly movePicker = viewChild<MoveFolderPickerComponent>('movePicker');
 
   // ---------------------------------------------------------------------------
   // Drag scratch state — captured at drag start, consumed on move / release.
@@ -197,25 +173,22 @@ export class FolderTreeComponent {
   private dragForbiddenIds: Set<string> = new Set();
   private draggedRowId: string | null = null;
 
+
+
   // ---------------------------------------------------------------------------
   // Lifecycle effects
   // ---------------------------------------------------------------------------
 
-  // Tracks which selection id we've already auto-expanded ancestors for.
-  // Without it the effect below would re-expand on every unrelated recompute
-  // (e.g. sessions change), undoing manual collapses the user just made.
-  private lastSelectedSeen: string | null | undefined = undefined;
-
   constructor() {
-    // Auto-expand ancestors of the selected file whenever the selection itself
-    // changes (not on every dependent recompute — see lastSelectedSeen).
+    // Auto-expand ancestors of the selected file whenever the selection itself changes.
+    // By keeping the ancestors lookup inside untracked, we isolate the reactive dependency
+    // to selectedFileId and prevent subsequent tree updates from undoing manual collapses.
     effect(() => {
       const selectedId = this.selectedFileId();
-      const ancestors = this.selectedFileAncestors();
+      if (!selectedId) return;
       untracked(() => {
-        if (this.lastSelectedSeen === selectedId) return;
-        this.lastSelectedSeen = selectedId;
-        if (!selectedId || ancestors.length === 0) return;
+        const ancestors = this.selectedFileAncestors();
+        if (ancestors.length === 0) return;
         this.expandedIds.update((set) => {
           const next = new Set(set);
           for (const a of ancestors) next.add(a);
@@ -234,6 +207,7 @@ export class FolderTreeComponent {
       const vp = this.viewport();
       if (!vp) return;
       vp.checkViewportSize();
+      if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver(() => vp.checkViewportSize());
       observer.observe(vp.elementRef.nativeElement);
       destroyRef.onDestroy(() => observer.disconnect());
@@ -301,13 +275,13 @@ export class FolderTreeComponent {
     if (!vp) return;
 
     const rect = vp.elementRef.nativeElement.getBoundingClientRect();
-    const scrollOffset = vp.measureScrollOffset();
-
     const pointerYInViewport = event.pointerPosition.y - rect.top;
     if (pointerYInViewport < 0 || pointerYInViewport > rect.height) {
       this.dropTarget.set(null);
       return;
     }
+
+    const scrollOffset = vp.measureScrollOffset();
     const pointerY = pointerYInViewport + scrollOffset;
     const rowIndex = Math.floor(pointerY / this.ROW_HEIGHT);
     const offsetInRow = pointerY - rowIndex * this.ROW_HEIGHT;
@@ -339,7 +313,12 @@ export class FolderTreeComponent {
     }
   }
 
-  protected onDragReleased(_event: CdkDragRelease, _sourceRow: FlatRowData): void {
+  // Uses (cdkDragEnded) — fires AFTER the drop animation finishes, so the
+  // source DOM is fully restored and cdkDrag's internal cleanup is done by
+  // the time we mutate `sessions`. Mutating earlier (e.g. on cdkDragReleased)
+  // races with the recycle-view-repeater strategy and produces the
+  // insertBefore / null-context errors observed under cdk-virtual-scroll.
+  protected onDragEnded(_event: CdkDragEnd, _sourceRow: FlatRowData): void {
     const target = this.dropTarget();
     const sourceId = this.draggedRowId;
     this.dropTarget.set(null);
@@ -349,8 +328,8 @@ export class FolderTreeComponent {
 
     const rows = this.flatRows();
     const { parentId, index } = this.resolveDropTarget(rows, target, sourceId);
+
     this.moveNode(sourceId, parentId, index);
-    // Expand the new parent so the dropped item is visible
     if (parentId) {
       this.expandedIds.update((set) => {
         if (set.has(parentId)) return set;
@@ -443,6 +422,15 @@ export class FolderTreeComponent {
     this.creatingId.set(null);
   }
 
+  protected onRenameInputBlur(id: string): void {
+    const value = this.editingValue().trim();
+    if (value) {
+      this.commitRename(id);
+    } else {
+      this.cancelRename();
+    }
+  }
+
   protected onDelete(row: FlatRowData): void {
     if (this.editingId() === row.id) {
       this.editingId.set(null);
@@ -456,15 +444,10 @@ export class FolderTreeComponent {
   // ---------------------------------------------------------------------------
 
   protected openMovePicker(row: FlatRowData, event: Event): void {
-    this.movingRowId.set(row.id);
-    this.movePicker()?.toggle(event);
+    this.movePicker()?.open(row, event);
   }
 
-  protected confirmMove(targetFolderId: string | null): void {
-    const sourceId = this.movingRowId();
-    this.movingRowId.set(null);
-    this.movePicker()?.hide();
-    if (!sourceId) return;
+  protected onMoveConfirmed({ sourceId, targetFolderId }: MoveFolderRequest): void {
     this.moveNode(sourceId, targetFolderId, 0);
     if (targetFolderId) {
       this.expandedIds.update((set) => {
@@ -474,10 +457,6 @@ export class FolderTreeComponent {
         return next;
       });
     }
-  }
-
-  protected onMovePickerHide(): void {
-    this.movingRowId.set(null);
   }
 
   // ---------------------------------------------------------------------------
@@ -497,15 +476,6 @@ export class FolderTreeComponent {
   private deleteNode(id: string): void {
     const { forest } = removeNode(this.sessions(), id);
     this.sessions.set(forest);
-    // Suppress the layout (if any) so it doesn't migrate to "Others" while
-    // the parent's input still contains it. Harmless for folder ids — they
-    // never match a layout.
-    this.suppressedLayoutIds.update((s) => {
-      if (s.has(id)) return s;
-      const next = new Set(s);
-      next.add(id);
-      return next;
-    });
     if (this.selectedFileId() === id) this.selectedFileId.set(null);
   }
 }

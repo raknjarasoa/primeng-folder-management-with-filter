@@ -1,20 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { FolderTreeComponent } from './folder-tree.component';
 import {
-  SessionNode,
-  LayoutInstance,
+  TreeItem,
   isFolderNode,
-  FlatRow,
+  FlatRowData,
 } from '../models/folder-tree.models';
+import { LayoutInstance } from '../models/layout-instance.model';
 
 // ---------------------------------------------------------------------------
 // Test data
 // ---------------------------------------------------------------------------
 
-function makeSessions(): SessionNode[] {
+function makeSessions(): TreeItem[] {
   return [
     {
       id: 'f-root',
@@ -36,13 +36,13 @@ function makeSessions(): SessionNode[] {
 
 function makeLayouts(): LayoutInstance[] {
   return [
-    { id: 'file-1', name: 'Alpha Report', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
-    { id: 'file-2', name: 'Beta Dashboard', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
-    { id: 'file-top', name: 'Top Level File', lastUpdated: '2026-01-01T00:00:00Z', lastViewDate: '2026-01-02T00:00:00Z' },
+    { id: 'file-1', name: 'Alpha Report', editable: true, username: '', description: '', tooltip: '' },
+    { id: 'file-2', name: 'Beta Dashboard', editable: true, username: '', description: '', tooltip: '' },
+    { id: 'file-top', name: 'Top Level File', editable: true, username: '', description: '', tooltip: '' },
   ];
 }
 
-function findRow(rows: readonly FlatRow[], id: string): FlatRow | undefined {
+function findRow(rows: readonly FlatRowData[], id: string): FlatRowData | undefined {
   return rows.find((r) => r.id === id);
 }
 
@@ -52,8 +52,15 @@ async function settle(fixture: ComponentFixture<FolderTreeComponent>): Promise<v
   fixture.detectChanges();
 }
 
+// flatRows depends on the *debounced* filter signal (300 ms). Tests that
+// mutate filterText need to wait past that or the new rows won't be visible.
+async function settleAfterFilter(fixture: ComponentFixture<FolderTreeComponent>): Promise<void> {
+  await new Promise((r) => setTimeout(r, 350));
+  await settle(fixture);
+}
+
 // ---------------------------------------------------------------------------
-// Component integration tests
+// Tests
 // ---------------------------------------------------------------------------
 
 describe('FolderTreeComponent', () => {
@@ -73,14 +80,14 @@ describe('FolderTreeComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Creation & basic rendering
+  // Creation
   // -----------------------------------------------------------------------
 
   it('creates the component', () => {
     expect(component).toBeTruthy();
   });
 
-  it('produces a non-empty flat row list when inputs are set', async () => {
+  it('produces a non-empty flatRows list when inputs are set', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
@@ -91,19 +98,20 @@ describe('FolderTreeComponent', () => {
   it('projects layout names onto file rows', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
-    fixture.componentRef.setInput('selectedFileId', 'file-2'); // expand ancestors
+    fixture.componentRef.setInput('selectedFileId', 'file-2'); // expand ancestors so file-2 surfaces
     await settle(fixture);
 
     const rows = component['flatRows']();
     expect(findRow(rows, 'f-root')?.label).toBe('Root Folder');
     expect(findRow(rows, 'file-top')?.label).toBe('Top Level File');
+    expect(findRow(rows, 'file-2')?.label).toBe('Beta Dashboard');
   });
 
   // -----------------------------------------------------------------------
-  // File selection / auto-expansion
+  // Selection / auto-expansion
   // -----------------------------------------------------------------------
 
-  it('auto-expands ancestor folders for a selected file', async () => {
+  it('auto-expands ancestors of the selected file', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     fixture.componentRef.setInput('selectedFileId', 'file-2');
@@ -123,6 +131,22 @@ describe('FolderTreeComponent', () => {
     expect(findRow(component['flatRows'](), 'file-2')).toBeUndefined();
   });
 
+  it('emits fileSelected when a file row is clicked, even for re-clicks', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', 'file-1');
+    await settle(fixture);
+
+    const emitted: string[] = [];
+    component.fileSelected.subscribe((id) => emitted.push(id));
+
+    const row = findRow(component['flatRows'](), 'file-1')!;
+    component['onRowClick'](row);
+    component['onRowClick'](row); // same id again — model wouldn't notify, but output should
+
+    expect(emitted).toEqual(['file-1', 'file-1']);
+  });
+
   // -----------------------------------------------------------------------
   // Filtering
   // -----------------------------------------------------------------------
@@ -133,8 +157,7 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     component['filterText'].set('alpha');
-    await new Promise((r) => setTimeout(r, 350));
-    await settle(fixture);
+    await settleAfterFilter(fixture);
 
     const rows = component['flatRows']();
     expect(findRow(rows, 'file-1')).toBeDefined();
@@ -148,8 +171,7 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     component['filterText'].set('zzzzzzzzz');
-    await new Promise((r) => setTimeout(r, 350));
-    await settle(fixture);
+    await settleAfterFilter(fixture);
 
     expect(component['flatRows']().length).toBe(0);
     expect(component['isFiltering']()).toBe(true);
@@ -161,11 +183,10 @@ describe('FolderTreeComponent', () => {
     await settle(fixture);
 
     component['filterText'].set('alpha');
-    await new Promise((r) => setTimeout(r, 350));
-    await settle(fixture);
+    await settleAfterFilter(fixture);
 
-    const aRow = findRow(component['flatRows'](), 'f-root')!;
-    expect(component['canDrag'](aRow)).toBe(false);
+    const root = findRow(component['flatRows'](), 'f-root')!;
+    expect(component['canDrag'](root)).toBe(false);
   });
 
   // -----------------------------------------------------------------------
@@ -183,7 +204,7 @@ describe('FolderTreeComponent', () => {
     expect(component['editingValue']()).toBe('Root Folder');
   });
 
-  it('commits rename and updates the store', async () => {
+  it('commits a rename and updates sessions', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
@@ -193,7 +214,7 @@ describe('FolderTreeComponent', () => {
     component['commitRename']('f-root');
 
     expect(component['editingId']()).toBeNull();
-    const session = component.store.sessions()[0];
+    const session = component.sessions()[0];
     expect(isFolderNode(session)).toBe(true);
     if (isFolderNode(session)) expect(session.name).toBe('New Name');
   });
@@ -207,9 +228,54 @@ describe('FolderTreeComponent', () => {
     component['editingValue'].set('   ');
     component['commitRename']('f-root');
 
-    expect(component['editingId']()).toBe('f-root');
-    const session = component.store.sessions()[0];
+    expect(component['editingId']()).toBe('f-root'); // still editing
+    const session = component.sessions()[0];
     if (isFolderNode(session)) expect(session.name).toBe('Root Folder');
+  });
+
+  it('commits a rename on blur if a valid name is present', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['startRename']('f-root', 'Root Folder');
+    component['editingValue'].set('New Name via Blur');
+    component['onRenameInputBlur']('f-root');
+
+    expect(component['editingId']()).toBeNull();
+    const session = component.sessions()[0];
+    if (isFolderNode(session)) expect(session.name).toBe('New Name via Blur');
+  });
+
+  it('reverts/cancels the rename on blur if the name is empty for an existing folder', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['startRename']('f-root', 'Root Folder');
+    component['editingValue'].set('   ');
+    component['onRenameInputBlur']('f-root');
+
+    expect(component['editingId']()).toBeNull();
+    const session = component.sessions()[0];
+    if (isFolderNode(session)) expect(session.name).toBe('Root Folder'); // reverted/unchanged
+  });
+
+  it('cancels and deletes the folder on blur if the name is empty for a newly created folder', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    const beforeCount = component.sessions().length;
+    component['onAddFolder'](); // adds a folder and triggers rename mode
+
+    const targetId = component['editingId']()!;
+    component['editingValue'].set('   '); // empty name
+    component['onRenameInputBlur'](targetId);
+
+    expect(component['editingId']()).toBeNull();
+    expect(component['creatingId']()).toBeNull();
+    expect(component.sessions().length).toBe(beforeCount); // deleted
   });
 
   // -----------------------------------------------------------------------
@@ -221,41 +287,40 @@ describe('FolderTreeComponent', () => {
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    const before = component.store.sessions().length;
+    const before = component.sessions().length;
     component['onAddFolder']();
 
-    expect(component.store.sessions().length).toBe(before + 1);
+    expect(component.sessions().length).toBe(before + 1);
     expect(component['editingId']()).not.toBeNull();
     expect(component['creatingId']()).not.toBeNull();
   });
 
-  it('removes ephemeral folder on cancel', async () => {
+  it('removes the ephemeral folder when rename is cancelled', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    const before = component.store.sessions().length;
+    const before = component.sessions().length;
     component['onAddFolder']();
-    const newId = component['creatingId']()!;
-    component['cancelRename'](newId);
+    component['cancelRename']();
 
-    expect(component.store.sessions().length).toBe(before);
+    expect(component.sessions().length).toBe(before);
     expect(component['editingId']()).toBeNull();
     expect(component['creatingId']()).toBeNull();
   });
 
-  it('adds a subfolder inside a parent and expands it', async () => {
+  it('adds a subfolder inside a parent and expands that parent', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
     await settle(fixture);
 
-    const first = component.store.sessions()[0];
+    const first = component.sessions()[0];
     if (!isFolderNode(first)) throw new Error('expected folder');
     const childrenBefore = first.children.length;
 
     component['onAddFolder']('f-root');
 
-    const updated = component.store.sessions()[0];
+    const updated = component.sessions()[0];
     if (isFolderNode(updated)) {
       expect(updated.children.length).toBe(childrenBefore + 1);
     }
@@ -280,26 +345,131 @@ describe('FolderTreeComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Delete flow
+  // Delete (no confirmation dialog any more — immediate)
   // -----------------------------------------------------------------------
 
-  it('opens the confirmation dialog on delete', async () => {
+  it('removes a folder immediately on delete', async () => {
     fixture.componentRef.setInput('sessions', makeSessions());
     fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', 'file-2');
     await settle(fixture);
 
-    const confirmSpy = vi.spyOn(component['confirmationService'], 'confirm');
-    const fileRow: FlatRow = {
+    // Pick an empty folder to delete (deletion is only enabled for empty
+    // folders in the UI, but the protected method itself does not enforce it).
+    fixture.componentRef.setInput('sessions', [
+      ...makeSessions(),
+      { id: 'f-empty', kind: 'folder', name: 'Empty', children: [] },
+    ]);
+    await settle(fixture);
+
+    const before = component.sessions().length;
+    component['onDelete']({
+      id: 'f-empty',
+      kind: 'folder',
+      label: 'Empty',
+      depth: 0,
+      expanded: false,
+      hasChildren: false,
+    });
+
+    expect(component.sessions().length).toBe(before - 1);
+  });
+
+  it('clears selectedFileId when the selected file is deleted', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    fixture.componentRef.setInput('selectedFileId', 'file-top');
+    await settle(fixture);
+
+    component['onDelete']({
       id: 'file-top',
       kind: 'file',
       label: 'Top Level File',
       depth: 0,
       expanded: false,
       hasChildren: false,
-    };
-    component['onDelete'](fileRow);
+    });
 
-    expect(confirmSpy).toHaveBeenCalledOnce();
-    expect(confirmSpy.mock.calls[0][0].header).toBe('Confirm Deletion');
+    expect(component.selectedFileId()).toBeNull();
+  });
+
+  // -----------------------------------------------------------------------
+  // Move-to picker integration
+  //
+  // The picker UI now lives in MoveFolderPickerComponent (covered by its own
+  // spec). What the parent owns is the post-emit handler — applying the move
+  // and auto-expanding the destination folder.
+  // -----------------------------------------------------------------------
+
+  it('onMoveConfirmed moves the source into the chosen folder and expands it', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['onMoveConfirmed']({ sourceId: 'file-top', targetFolderId: 'f-nested' });
+
+    const root = component.sessions()[0];
+    expect(isFolderNode(root)).toBe(true);
+    if (!isFolderNode(root)) return;
+    const nested = root.children.find((c) => c.id === 'f-nested');
+    expect(nested).toBeDefined();
+    if (nested && isFolderNode(nested)) {
+      expect(nested.children.map((c) => c.id)).toContain('file-top');
+    }
+    expect(component['expandedIds']().has('f-nested')).toBe(true);
+  });
+
+  it('onMoveConfirmed with null target moves the source to root', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    fixture.componentRef.setInput('layouts', makeLayouts());
+    await settle(fixture);
+
+    component['onMoveConfirmed']({ sourceId: 'file-2', targetFolderId: null });
+
+    expect(component.sessions().some((n) => n.id === 'file-2')).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Orphans / Other Users
+  // -----------------------------------------------------------------------
+
+  it('groups orphan layouts under "Other Users" and renders user folders', async () => {
+    fixture.componentRef.setInput('sessions', makeSessions());
+    const orphanLayout: LayoutInstance = {
+      id: 'layout-orphan',
+      name: 'Orphan Layout',
+      editable: false,
+      username: 'John Doe',
+      description: '',
+      tooltip: '',
+    };
+    fixture.componentRef.setInput('layouts', [...makeLayouts(), orphanLayout]);
+
+    // Expand the virtual "Other Users" folder and the user folder
+    component['expandedIds'].update((set) => {
+      const next = new Set(set);
+      next.add('virtual-others-root');
+      next.add('virtual-user-John Doe');
+      return next;
+    });
+    await settle(fixture);
+
+    const rows = component['flatRows']();
+    const rootRow = findRow(rows, 'virtual-others-root');
+    const userRow = findRow(rows, 'virtual-user-John Doe');
+    const orphanRow = findRow(rows, 'layout-orphan');
+
+    expect(rootRow).toBeDefined();
+    expect(userRow).toBeDefined();
+    expect(orphanRow).toBeDefined();
+
+    expect(rootRow?.isOther).toBe(true);
+    expect(userRow?.isOther).toBe(true);
+    expect(orphanRow?.isOther).toBe(true);
+
+    // Verify row properties
+    expect(rootRow?.kind).toBe('folder');
+    expect(userRow?.kind).toBe('folder');
+    expect(orphanRow?.kind).toBe('file');
   });
 });

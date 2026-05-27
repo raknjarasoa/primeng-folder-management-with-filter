@@ -1,0 +1,68 @@
+<p-popover #popover styleClass="move-picker-popover" (onHide)="onHide()">
+  <div class="move-picker">
+    <div class="move-picker__header">
+      <span class="move-picker__title">Move to</span>
+      @if (movingRowLabel(); as label) {
+        <span class="move-picker__source" [title]="label">
+          <i
+            class="fas"
+            [class.fa-folder]="movingRowKind() === 'folder'"
+            [class.fa-file]="movingRowKind() === 'file'"
+          ></i>
+          <span class="move-picker__source-label">{{ label }}</span>
+        </span>
+      }
+    </div>
+
+    @if (moveCandidates().length > 5) {
+      <div class="move-picker__filter">
+        <i class="fas fa-search move-picker__filter-icon"></i>
+        <input
+          type="text"
+          [pAutoFocus]="true"
+          class="move-picker__filter-input"
+          placeholder="Filter folders…"
+          [(ngModel)]="moveFilterText"
+        />
+      </div>
+    }
+
+    <div class="move-picker__list">
+      <button
+        type="button"
+        class="move-picker__option move-picker__option--root"
+        (click)="confirm(null)"
+      >
+        <i class="fas fa-house move-picker__icon"></i>
+        <span class="move-picker__option-label">Root</span>
+        <span class="move-picker__hint">top level</span>
+      </button>
+
+      @if (filteredMoveCandidates().length > 0) {
+        <div class="move-picker__divider"></div>
+      }
+
+      @for (folder of filteredMoveCandidates(); track folder.id) {
+        <button
+          type="button"
+          class="move-picker__option"
+          (click)="confirm(folder.id)"
+        >
+          @for (_ of [].constructor(folder.depth); track $index) {
+            <span class="move-picker__guide"></span>
+          }
+          <i class="fas fa-folder move-picker__icon"></i>
+          <span class="move-picker__option-label" [title]="folder.label">
+            {{ folder.label }}
+          </span>
+        </button>
+      }
+
+      @if (moveCandidates().length > 0 && filteredMoveCandidates().length === 0) {
+        <div class="move-picker__empty">
+          No folders match "{{ moveFilterText() }}"
+        </div>
+      }
+    </div>
+  </div>
+</p-popover>
