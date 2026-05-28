@@ -49,6 +49,7 @@ import { NodeData, SessionNode, Layout, isFolder } from '../models/folder-tree.m
   styleUrl: './folder-tree.component.scss',
   host: {
     '[class.is-dragging]': 'isDragging()',
+    '[class.is-virtual]': 'virtualScroll()',
     '(dragstart)': 'onDragStart()',
     '(dragend)': 'onDragEnd()',
   },
@@ -57,6 +58,19 @@ export class FolderTreeComponent {
   sessions = model.required<SessionNode[]>();
   layouts = input<Layout[]>([]);
   selectedFileId = model.required<string | null>();
+
+  // Opt-in virtual scrolling. When enabled, PrimeNG only renders the rows
+  // currently in the viewport (~20 at a time instead of the whole tree),
+  // which collapses drag-event CD cost on large trees from O(visible nodes)
+  // to O(viewport nodes). Off by default to preserve the existing visual
+  // contract (auto-growing tree, no internal scrollbar).
+  //
+  // Requires a fixed row height – tune `virtualScrollItemSize` to match
+  // your actual row height including padding (default 36 px works for the
+  // shipped row template).
+  virtualScroll = input<boolean>(false);
+  virtualScrollItemSize = input<number>(36);
+  scrollHeight = input<string>('400px');
 
   protected readonly store = inject(FolderTreeStore);
   protected readonly confirmationService = inject(ConfirmationService);
@@ -86,6 +100,13 @@ export class FolderTreeComponent {
   );
 
   protected readonly isFiltering = computed(() => this.debouncedFilterText().trim().length > 0);
+
+  // Only forward scrollHeight to PrimeNG when virtual scroll is on – when off,
+  // a non-empty scrollHeight would create an extra scroll container around the
+  // tree and break the auto-growing layout.
+  protected readonly effectiveScrollHeight = computed<string | undefined>(() =>
+    this.virtualScroll() ? this.scrollHeight() : undefined,
+  );
 
   private isInitialLoad = true;
 

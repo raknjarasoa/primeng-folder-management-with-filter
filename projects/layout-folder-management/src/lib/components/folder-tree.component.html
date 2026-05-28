@@ -42,6 +42,9 @@
     [selection]="selectedNode()"
     (selectionChange)="onSelectionChange($event)"
     (onNodeDrop)="onNodeDrop($event)"
+    [virtualScroll]="virtualScroll()"
+    [virtualScrollItemSize]="virtualScrollItemSize()"
+    [scrollHeight]="effectiveScrollHeight()"
     styleClass="tree"
   >
     <ng-template let-node pTemplate="default">

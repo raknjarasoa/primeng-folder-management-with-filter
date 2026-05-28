@@ -21,6 +21,27 @@
   opacity: 1;
 }
 
+// Virtual scroll requires every row to be the same fixed height (matching
+// `virtualScrollItemSize`). Anything that could push a row taller has to
+// be clamped, or PrimeNG mis-positions later rows. We only apply these
+// constraints when virtual scroll is on so the default layout is unaffected.
+:host(.is-virtual) {
+  // Keep each row to a single visual line and clip overflow.
+  .row {
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  // The label and metadata spans must shrink and ellipsize instead of pushing
+  // siblings out or wrapping.
+  .row > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+}
+
 // "Move to folder" overlay. Kept inside the component tree (appendTo=null)
 // so scoped styles still apply via ::ng-deep through PrimeNG internals.
 .move-overlay {

@@ -387,6 +387,35 @@ describe('FolderTreeComponent', () => {
       expect(component.store.sessions()).toBe(before);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Virtual scroll
+  // -----------------------------------------------------------------------
+
+  describe('virtual scroll', () => {
+    it('is off by default', () => {
+      expect(component.virtualScroll()).toBe(false);
+    });
+
+    it('exposes default item size and scroll height', () => {
+      expect(component.virtualScrollItemSize()).toBe(36);
+      expect(component.scrollHeight()).toBe('400px');
+    });
+
+    it('does not forward scrollHeight to PrimeNG when virtual scroll is off', () => {
+      fixture.componentRef.setInput('virtualScroll', false);
+      fixture.componentRef.setInput('scrollHeight', '600px');
+      fixture.detectChanges();
+      expect(component['effectiveScrollHeight']()).toBeUndefined();
+    });
+
+    it('forwards scrollHeight to PrimeNG when virtual scroll is on', () => {
+      fixture.componentRef.setInput('virtualScroll', true);
+      fixture.componentRef.setInput('scrollHeight', '600px');
+      fixture.detectChanges();
+      expect(component['effectiveScrollHeight']()).toBe('600px');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
