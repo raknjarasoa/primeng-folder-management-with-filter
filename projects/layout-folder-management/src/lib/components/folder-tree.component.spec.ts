@@ -312,6 +312,110 @@ describe('FolderTreeComponent', () => {
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(confirmSpy.mock.calls[0][0].header).toBe('Confirm Deletion');
   });
+
+  // -----------------------------------------------------------------------
+  // Move to folder overlay
+  // -----------------------------------------------------------------------
+
+  describe('Move to folder', () => {
+    beforeEach(async () => {
+      fixture.componentRef.setInput('sessions', makeSessions());
+      fixture.componentRef.setInput('layouts', makeLayouts());
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    });
+
+    it('moveDestinationNodes contains only folders', () => {
+      component['movingNodeId'].set('file-1');
+      const nodes = component['moveDestinationNodes']();
+
+      const allFolders = (list: any[]): boolean =>
+        list.every((n) => n.data?.kind === 'folder' && (!n.children || allFolders(n.children)));
+
+      expect(allFolders(nodes)).toBe(true);
+    });
+
+    it('excludes the source folder (and its descendants) from destinations', () => {
+      component['movingNodeId'].set('f-root');
+      const nodes = component['moveDestinationNodes']();
+
+      const containsKey = (list: any[], key: string): boolean =>
+        list.some((n) => n.key === key || (n.children && containsKey(n.children, key)));
+
+      expect(containsKey(nodes, 'f-root')).toBe(false);
+      expect(containsKey(nodes, 'f-nested')).toBe(false);
+    });
+
+    it('moves a file into the picked folder via onMoveDestinationSelected', () => {
+      component['movingNodeId'].set('file-top');
+      component['onMoveDestinationSelected']({
+        originalEvent: new MouseEvent('click'),
+        node: { key: 'f-root', data: { id: 'f-root', kind: 'folder' } } as any,
+      });
+
+      const root = component.store.sessions().find((s) => s.id === 'f-root');
+      expect(root).toBeDefined();
+      if (root && isFolder(root)) {
+        expect(root.children.some((c) => c.id === 'file-top')).toBe(true);
+      }
+      expect(component['movingNodeId']()).toBeNull();
+    });
+
+    it('moves a node to root level via onMoveToRoot', () => {
+      component['movingNodeId'].set('file-1');
+      const rootCountBefore = component.store.sessions().length;
+
+      component['onMoveToRoot']();
+
+      const rootSessions = component.store.sessions();
+      expect(rootSessions.length).toBe(rootCountBefore + 1);
+      expect(rootSessions.some((s) => s.id === 'file-1')).toBe(true);
+      expect(component['movingNodeId']()).toBeNull();
+    });
+
+    it('clears movingNodeId when the overlay is dismissed', () => {
+      component['movingNodeId'].set('file-1');
+      component['onMoveOverlayHide']();
+      expect(component['movingNodeId']()).toBeNull();
+    });
+
+    it('does nothing when no source is set', () => {
+      const before = component.store.sessions();
+      component['movingNodeId'].set(null);
+      component['onMoveToRoot']();
+      expect(component.store.sessions()).toBe(before);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Virtual scroll
+  // -----------------------------------------------------------------------
+
+  describe('virtual scroll', () => {
+    it('is off by default', () => {
+      expect(component.virtualScroll()).toBe(false);
+    });
+
+    it('exposes default item size and scroll height', () => {
+      expect(component.virtualScrollItemSize()).toBe(36);
+      expect(component.scrollHeight()).toBe('400px');
+    });
+
+    it('does not forward scrollHeight to PrimeNG when virtual scroll is off', () => {
+      fixture.componentRef.setInput('virtualScroll', false);
+      fixture.componentRef.setInput('scrollHeight', '600px');
+      fixture.detectChanges();
+      expect(component['effectiveScrollHeight']()).toBeUndefined();
+    });
+
+    it('forwards scrollHeight to PrimeNG when virtual scroll is on', () => {
+      fixture.componentRef.setInput('virtualScroll', true);
+      fixture.componentRef.setInput('scrollHeight', '600px');
+      fixture.detectChanges();
+      expect(component['effectiveScrollHeight']()).toBe('600px');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
