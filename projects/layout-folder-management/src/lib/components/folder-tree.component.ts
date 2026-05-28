@@ -44,6 +44,11 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
   providers: [TreeDragDropService, FolderTreeStore, ConfirmationService],
   templateUrl: './folder-tree.component.html',
   styleUrl: './folder-tree.component.scss',
+  host: {
+    '[class.is-dragging]': 'isDragging()',
+    '(dragstart)': 'onDragStart()',
+    '(dragend)': 'onDragEnd()',
+  },
 })
 export class FolderTreeComponent {
   sessions = model.required<SessionNode[]>();
@@ -56,6 +61,7 @@ export class FolderTreeComponent {
   protected readonly editingId = signal<string | null>(null);
   protected readonly editingValue = signal<string>('');
   protected readonly filterText = signal<string>('');
+  protected readonly isDragging = signal<boolean>(false);
 
   protected readonly debouncedFilterText = toSignal(
     toObservable(this.filterText).pipe(debounceTime(300)),
@@ -144,6 +150,10 @@ export class FolderTreeComponent {
   }
 
   protected onNodeDrop(event: TreeNodeDropEvent): void {
+    // Drag has ended visually – clear the dragging class so transitions
+    // can resume before the store rebuild kicks off.
+    this.isDragging.set(false);
+
     const dragNode = event.dragNode as TreeNode<NodeData> | undefined;
     if (!dragNode?.data) return;
 
@@ -156,8 +166,20 @@ export class FolderTreeComponent {
     const draggedId = dragNode.data.id;
     const targetFolderId = parent?.data?.id ?? null;
 
-    // Decouple store update from PrimeNG's synchronous drag-and-drop event loop
-    setTimeout(() => this.store.moveNode(draggedId, targetFolderId, index), 50);
+    // Defer the store update by one task to let PrimeNG finish unwinding
+    // its drop handler synchronously, but don't burn ~3 frames waiting –
+    // the previous 50 ms timeout was visible as a "snap" after the drop.
+    setTimeout(() => this.store.moveNode(draggedId, targetFolderId, index), 0);
+  }
+
+  protected onDragStart(): void {
+    this.isDragging.set(true);
+  }
+
+  protected onDragEnd(): void {
+    // Fires for both successful drops and cancelled drags. onNodeDrop also
+    // clears the flag – this is the safety net.
+    this.isDragging.set(false);
   }
 
   private findNodeInTree(

@@ -1,5 +1,8 @@
 :host {
   display: block;
+  // Isolate this subtree from the rest of the page so style/layout
+  // recalcs triggered by drag events don't ripple out.
+  contain: layout style;
 }
 
 // PrimeNG tree internal padding override
@@ -7,7 +10,45 @@
   --p-tree-padding: 4px;
 }
 
+.row {
+  // Containment keeps style/layout work inside a row when an unrelated
+  // row's hover/dragover class toggles.
+  contain: layout style;
+}
+
 // Actions fade in on row hover (Tailwind group-hover only works for direct descendants)
 .row:hover .actions {
   opacity: 1;
+}
+
+// While a drag is in flight every dragenter/dragleave on a drop-point or
+// drop-node triggers PrimeNG to toggle a class, which triggers Angular CD,
+// which re-evaluates every row's bindings. Hover transitions and opacity
+// fades on the action buttons compound this into hundreds of paints per
+// second on slower (Windows/integrated-GPU) machines, producing the
+// "saccadé" feel. Disable everything that's expensive and non-essential
+// for the duration of the drag.
+:host(.is-dragging) {
+  // Hide the per-row action buttons completely. They were already invisible
+  // (opacity: 0) but kept in the layout, and their `:hover { opacity: 1 }`
+  // rule was firing a transition for every row the cursor crossed.
+  .actions {
+    display: none !important;
+  }
+
+  // Kill every transition inside the tree while dragging.
+  .row,
+  .row *,
+  ::ng-deep .p-tree-node,
+  ::ng-deep .p-tree-node * {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  // Block hover/pointer effects from row contents – the drop targets
+  // (the .p-tree-node-content / drop-points) live on PrimeNG's own
+  // elements and don't need our row internals reacting to the cursor.
+  .row > * {
+    pointer-events: none !important;
+  }
 }
