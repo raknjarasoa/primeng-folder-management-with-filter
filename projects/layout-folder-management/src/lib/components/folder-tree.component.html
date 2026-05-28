@@ -126,6 +126,17 @@
             (click)="startRename(node.data.id, node.label); $event.stopPropagation()"
           ></button>
         }
+        @if (!node.data.isOther && editingId() !== node.data.id) {
+          <button
+            pButton
+            icon="fas fa-folder-tree"
+            text
+            rounded
+            size="small"
+            pTooltip="Move to folder…"
+            (click)="onMoveClick($event, node.data.id)"
+          ></button>
+        }
         @if (
           (node.data.kind === 'file' && !node.data.isOther) ||
           (node.data.kind === 'folder' && !node.data.isOther && (!node.children || node.children.length === 0))
@@ -146,4 +157,40 @@
   </ng-template>
 
   <p-confirmDialog></p-confirmDialog>
+
+  <p-popover
+    #movePopover
+    [appendTo]="null"
+    styleClass="move-popover"
+    (onHide)="onMoveOverlayHide()"
+  >
+    <div class="move-overlay min-w-[240px] max-w-[360px]">
+      <div class="text-[11px] uppercase tracking-wide text-gray-500 px-2 py-1.5 border-b border-gray-100">
+        Move to…
+      </div>
+
+      <button
+        pButton
+        text
+        severity="secondary"
+        icon="fas fa-house"
+        label="Root"
+        styleClass="w-full"
+        class="move-root-btn w-full text-sm"
+        (click)="onMoveToRoot()"
+      ></button>
+
+      @if (moveDestinationNodes().length > 0) {
+        <p-tree
+          [value]="moveDestinationNodes()"
+          selectionMode="single"
+          [metaKeySelection]="false"
+          (onNodeSelect)="onMoveDestinationSelected($event)"
+          styleClass="move-tree"
+        ></p-tree>
+      } @else {
+        <div class="text-xs text-gray-400 px-2 py-2">No other folders available</div>
+      }
+    </div>
+  </p-popover>
 </div>

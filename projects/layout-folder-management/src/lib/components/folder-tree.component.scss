@@ -21,6 +21,19 @@
   opacity: 1;
 }
 
+// "Move to folder" overlay. Kept inside the component tree (appendTo=null)
+// so scoped styles still apply via ::ng-deep through PrimeNG internals.
+.move-overlay {
+  ::ng-deep .p-tree {
+    border: none;
+    padding: 0;
+    background: transparent;
+    max-height: 280px;
+    overflow: auto;
+    --p-tree-padding: 2px;
+  }
+}
+
 // While a drag is in flight every dragenter/dragleave on a drop-point or
 // drop-node triggers PrimeNG to toggle a class, which triggers Angular CD,
 // which re-evaluates every row's bindings. Hover transitions and opacity

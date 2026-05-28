@@ -10,21 +10,23 @@ import {
   model,
   linkedSignal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet, DatePipe } from '@angular/common';
-import { TreeModule, TreeNodeDropEvent } from 'primeng/tree';
+import { TreeModule, TreeNodeDropEvent, TreeNodeSelectEvent } from 'primeng/tree';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { TreeDragDropService, TreeNode, ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { Popover, PopoverModule } from 'primeng/popover';
 
 import { FolderTreeStore } from '../store/folder-tree.store';
-import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
+import { NodeData, SessionNode, Layout, isFolder } from '../models/folder-tree.models';
 
 @Component({
   selector: 'app-folder-tree',
@@ -40,6 +42,7 @@ import { NodeData, SessionNode, Layout } from '../models/folder-tree.models';
     InputIconModule,
     DatePipe,
     ConfirmDialogModule,
+    PopoverModule,
   ],
   providers: [TreeDragDropService, FolderTreeStore, ConfirmationService],
   templateUrl: './folder-tree.component.html',
@@ -62,6 +65,20 @@ export class FolderTreeComponent {
   protected readonly editingValue = signal<string>('');
   protected readonly filterText = signal<string>('');
   protected readonly isDragging = signal<boolean>(false);
+
+  // Source node currently being moved via the "Move to folder" overlay.
+  // Null when the overlay is closed.
+  protected readonly movingNodeId = signal<string | null>(null);
+
+  protected readonly movePopover = viewChild<Popover>('movePopover');
+
+  // Folder-only projection of the live tree, shown inside the move overlay.
+  // The source node's subtree is excluded so a folder can't be moved into
+  // itself or any of its descendants.
+  protected readonly moveDestinationNodes = computed<TreeNode<NodeData>[]>(() => {
+    const sourceId = this.movingNodeId();
+    return buildFolderOnlyNodes(this.store.sessions(), sourceId);
+  });
 
   protected readonly debouncedFilterText = toSignal(
     toObservable(this.filterText).pipe(debounceTime(300)),
@@ -180,6 +197,38 @@ export class FolderTreeComponent {
     // Fires for both successful drops and cancelled drags. onNodeDrop also
     // clears the flag – this is the safety net.
     this.isDragging.set(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // "Move to folder" overlay
+  // ---------------------------------------------------------------------------
+
+  protected onMoveClick(event: Event, id: string): void {
+    event.stopPropagation();
+    this.movingNodeId.set(id);
+    this.movePopover()?.toggle(event);
+  }
+
+  protected onMoveDestinationSelected(event: TreeNodeSelectEvent): void {
+    const targetId = (event.node as TreeNode<NodeData> | undefined)?.data?.id;
+    if (!targetId) return;
+    this.performMove(targetId);
+  }
+
+  protected onMoveToRoot(): void {
+    this.performMove(null);
+  }
+
+  protected onMoveOverlayHide(): void {
+    this.movingNodeId.set(null);
+  }
+
+  private performMove(targetFolderId: string | null): void {
+    const sourceId = this.movingNodeId();
+    if (!sourceId) return;
+    this.store.moveNode(sourceId, targetFolderId);
+    this.movingNodeId.set(null);
+    this.movePopover()?.hide();
   }
 
   private findNodeInTree(
@@ -346,4 +395,27 @@ export class FolderTreeComponent {
     }
     return copy;
   }
+}
+
+// Build a folder-only PrimeNG tree projection from the domain sessions,
+// excluding the source node's subtree so it can't be picked as its own
+// destination (which would either be a no-op or create a cycle).
+function buildFolderOnlyNodes(
+  sessions: SessionNode[],
+  excludeId: string | null,
+): TreeNode<NodeData>[] {
+  const result: TreeNode<NodeData>[] = [];
+  for (const session of sessions) {
+    if (!isFolder(session)) continue;
+    if (excludeId && session.id === excludeId) continue;
+    result.push({
+      key: session.id,
+      label: session.name,
+      icon: 'fas fa-folder',
+      data: { id: session.id, kind: 'folder' },
+      children: buildFolderOnlyNodes(session.children, excludeId),
+      expanded: true,
+    });
+  }
+  return result;
 }
