@@ -38,15 +38,65 @@ export function isAncestorOrSelf(
   return findLocation(loc.node.children, descendantId) !== null;
 }
 
+// Helper for structural sharing
+function shallowUpdate(
+  forest: SessionNode[],
+  targetId: string | null,
+  updateFn: (siblings: SessionNode[]) => SessionNode[]
+): SessionNode[] {
+  if (targetId === null) {
+    return updateFn([...forest]);
+  }
+
+  // Walk the tree to find the target and rebuild the path back to the root
+  function walk(nodes: SessionNode[]): { newNodes: SessionNode[]; found: boolean } {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.id === targetId) {
+        // We found the target level! However, updateFn expects to mutate the siblings array itself
+        // or return a new one.
+        const newSiblings = [...nodes];
+        return { newNodes: updateFn(newSiblings), found: true };
+      }
+
+      if (isFolder(node) && node.children.length > 0) {
+        const { newNodes: newChildren, found } = walk(node.children);
+        if (found) {
+          const newSiblings = [...nodes];
+          newSiblings[i] = { ...node, children: newChildren };
+          return { newNodes: newSiblings, found: true };
+        }
+      }
+    }
+    return { newNodes: nodes, found: false };
+  }
+
+  const { newNodes, found } = walk(forest);
+  return found ? newNodes : forest;
+}
+
+
 export function removeNode(
   forest: SessionNode[],
   id: string,
 ): { forest: SessionNode[]; removed: SessionNode | null } {
-  const cloned = structuredClone(forest);
-  const loc = findLocation(cloned, id);
-  if (!loc) return { forest: cloned, removed: null };
-  const [removed] = loc.siblings.splice(loc.index, 1);
-  return { forest: cloned, removed };
+  let removed: SessionNode | null = null;
+  let targetParentId: string | null = null;
+
+  const loc = findLocation(forest, id);
+  if (!loc) return { forest, removed: null };
+  removed = loc.node;
+  targetParentId = loc.parent ? loc.parent.id : null;
+
+  const newForest = shallowUpdate(forest, removed.id, (siblings) => {
+    const idx = siblings.findIndex(n => n.id === id);
+    if (idx !== -1) {
+      siblings.splice(idx, 1);
+    }
+    return siblings;
+  });
+
+  return { forest: newForest, removed };
 }
 
 export function insertNode(
@@ -55,18 +105,50 @@ export function insertNode(
   targetFolderId: string | null,
   index?: number,
 ): SessionNode[] {
-  const cloned = structuredClone(forest);
   if (targetFolderId === null) {
-    cloned.splice(index ?? cloned.length, 0, node);
-    return cloned;
+    const newForest = [...forest];
+    newForest.splice(index ?? newForest.length, 0, node);
+    return newForest;
   }
-  const loc = findLocation(cloned, targetFolderId);
-  if (!loc || !isFolder(loc.node)) {
-    cloned.push(node);
-    return cloned;
+
+  // Find the target folder so we can update its children.
+  function walk(nodes: SessionNode[]): { newNodes: SessionNode[]; found: boolean } {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.id === targetFolderId) {
+        if (!isFolder(n)) {
+          // If target is not a folder, we can't insert into it.
+          // Previous logic fell back to pushing to the root of cloned forest, but
+          // looking at the old code:
+          // if (!loc || !isFolder(loc.node)) { cloned.push(node); return cloned; }
+          return { newNodes: nodes, found: false };
+        }
+
+        const newSiblings = [...nodes];
+        const newChildren = [...n.children];
+        newChildren.splice(index ?? newChildren.length, 0, node);
+        newSiblings[i] = { ...n, children: newChildren };
+        return { newNodes: newSiblings, found: true };
+      }
+
+      if (isFolder(n) && n.children.length > 0) {
+        const { newNodes: newChildren, found } = walk(n.children);
+        if (found) {
+          const newSiblings = [...nodes];
+          newSiblings[i] = { ...n, children: newChildren };
+          return { newNodes: newSiblings, found: true };
+        }
+      }
+    }
+    return { newNodes: nodes, found: false };
   }
-  loc.node.children.splice(index ?? loc.node.children.length, 0, node);
-  return cloned;
+
+  const { newNodes, found } = walk(forest);
+  if (!found) {
+    // Fallback: if not found or not a folder, append to root.
+    return [...forest, node];
+  }
+  return newNodes;
 }
 
 export function renameFolder(
@@ -74,11 +156,32 @@ export function renameFolder(
   id: string,
   newName: string,
 ): SessionNode[] {
-  const cloned = structuredClone(forest);
-  const loc = findLocation(cloned, id);
-  if (!loc || !isFolder(loc.node)) return cloned;
-  loc.node.name = newName;
-  return cloned;
+  function walk(nodes: SessionNode[]): { newNodes: SessionNode[]; found: boolean } {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.id === id) {
+        if (!isFolder(node)) return { newNodes: nodes, found: true }; // don't modify files
+        const newSiblings = [...nodes];
+        newSiblings[i] = { ...node, name: newName };
+        return { newNodes: newSiblings, found: true };
+      }
+      if (isFolder(node) && node.children.length > 0) {
+        const { newNodes: newChildren, found } = walk(node.children);
+        if (found) {
+          const newSiblings = [...nodes];
+          newSiblings[i] = { ...node, children: newChildren };
+          return { newNodes: newSiblings, found: true };
+        }
+      }
+    }
+    return { newNodes: nodes, found: false };
+  }
+
+  const { newNodes, found } = walk(forest);
+
+  // Previous code cloned the whole forest even if not found.
+  // We match the old behaviour where if id was missing, it returned a newly cloned array.
+  return found ? newNodes : [...forest];
 }
 
 export function addFolder(

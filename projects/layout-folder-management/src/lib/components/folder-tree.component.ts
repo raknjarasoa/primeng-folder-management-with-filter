@@ -97,7 +97,16 @@ export class FolderTreeComponent {
 
       const keysToExpand = source.filter ? this.collectKeys(filtered) : expandedKeys;
 
-      return filtered.map((n) => this.copyNode(n, keysToExpand));
+      // Instead of deeply copying the entire tree, we only clone nodes that need their `expanded` state updated.
+      // If we are filtering, `filterTree` already returns new node objects, so we can just mutate `.expanded` directly.
+      if (source.filter) {
+        this.applyExpanded(filtered, keysToExpand);
+        return filtered;
+      }
+
+      // If not filtering, we do a shallow update to avoid destroying unmodified node references,
+      // which significantly improves PrimeNG's change detection performance on large trees.
+      return this.shallowUpdateExpanded(filtered, keysToExpand);
     },
   });
 
@@ -312,16 +321,50 @@ export class FolderTreeComponent {
     return undefined;
   }
 
-  private copyNode(
-    node: TreeNode<NodeData>,
+  private applyExpanded(nodes: TreeNode<NodeData>[], expandedKeys: Set<string>): void {
+    const walk = (list: TreeNode<NodeData>[]) => {
+      for (const n of list) {
+        if (n.key && expandedKeys.has(n.key)) n.expanded = true;
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(nodes);
+  }
+
+  private shallowUpdateExpanded(
+    nodes: TreeNode<NodeData>[],
     expandedKeys: Set<string>,
-    parent?: TreeNode<NodeData>,
-  ): TreeNode<NodeData> {
-    const copy: TreeNode<NodeData> = { ...node, parent };
-    if (node.key && expandedKeys.has(node.key)) copy.expanded = true;
-    if (node.children) {
-      copy.children = node.children.map((c) => this.copyNode(c, expandedKeys, copy));
-    }
-    return copy;
+    parent?: TreeNode<NodeData>
+  ): TreeNode<NodeData>[] {
+    return nodes.map((node) => {
+      const shouldBeExpanded = node.key ? expandedKeys.has(node.key) : false;
+      const isExpanded = !!node.expanded;
+
+      let newChildren = node.children;
+      let childrenChanged = false;
+
+      if (node.children) {
+        const updatedChildren = this.shallowUpdateExpanded(node.children, expandedKeys, node);
+        // We check if children changed by reference
+        if (updatedChildren !== node.children && updatedChildren.some((c, i) => c !== node.children![i])) {
+          newChildren = updatedChildren;
+          childrenChanged = true;
+        }
+      }
+
+      // If neither the expanded state nor the children changed, we can reuse the existing node object.
+      // We also verify if parent matches, since if a parent is newly created, its children might need parent reference updated.
+      // However, PrimeNG's Tree often works fine even without explicit parent pointers in basic use-cases,
+      // but to be safe and match the old behavior, we will update parent pointer if it changed.
+      if (shouldBeExpanded === isExpanded && !childrenChanged && node.parent === parent) {
+        return node;
+      }
+
+      const copy: TreeNode<NodeData> = { ...node, parent };
+      if (shouldBeExpanded) copy.expanded = true;
+      if (childrenChanged) copy.children = newChildren;
+
+      return copy;
+    });
   }
 }
